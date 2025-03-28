@@ -1,7 +1,11 @@
 import React, { useState, useRef, useEffect } from "react";
+import { doc, setDoc, updateDoc, onSnapshot, getDoc } from "firebase/firestore";
+import { db } from "../firebase/firebaseConfig"; // Adjust the import path as needed
 import TimelineBoard from "./TimelineBoard";
 import CalendarComponent from "./CalendarComponent";
 import TeamBoard from "./TeamBoard";
+
+const projectId = "project1";
 
 import {
   MoreHorizontal,
@@ -21,20 +25,22 @@ import {
 
 const KanbanBoard = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [boardTitle, setBoardTitle] = useState("My Project Board");
+  const [boardTitle, setBoardTitle] = useState("Loading...");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(boardTitle);
   const [activeTab, setActiveTab] = useState("tasks");
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [currentTask, setCurrentTask] = useState(null);
   const [currentColumn, setCurrentColumn] = useState(null);
   const [originalColumn, setOriginalColumn] = useState(null);
   const [draggedTask, setDraggedTask] = useState(null);
   const [taskMenuOpen, setTaskMenuOpen] = useState(null);
-  const taskNameInputRef = useRef(null);
-  const [isAddingNewTask, setIsAddingNewTask] = useState(false);
+  const [lastEditedField, setLastEditedField] = useState(null);
 
+  const [isAddingNewTask, setIsAddingNewTask] = useState(false);
+  const taskNameInputRef = useRef(null);
+  const descriptionInputRef = useRef(null);
   const generateId = () => Math.floor(Math.random() * 10000);
 
   const toggleDarkMode = () => {
@@ -100,20 +106,54 @@ const KanbanBoard = () => {
     },
   ]);
 
-  useEffect(() => {
-    if (showTaskModal && taskNameInputRef.current) {
-      setTimeout(() => {
-        taskNameInputRef.current.focus();
-      }, 0);
-    }
-  }, [showTaskModal]);
-
   const handleDragStart = (task, columnId) => {
     setDraggedTask({ task, sourceColumnId: columnId });
   };
 
   const handleDragOver = (e, columnId) => {
     e.preventDefault();
+  };
+
+  // When saving columns
+  const saveColumnsToFirestore = async (columns) => {
+    try {
+      const projectRef = doc(db, "projects", projectId, "Tasks", "Tasks");
+      await setDoc(projectRef, { columns }, { merge: true });
+      console.log("Columns successfully updated in Firestore!");
+    } catch (error) {
+      console.error("Error updating columns in Firestore:", error);
+    }
+  };
+
+  // When loading columns
+  const loadColumnsFromFirestore = async () => {
+    try {
+      const projectRef = doc(db, "projects", projectId, "Tasks", "Tasks");
+      const projectSnap = await getDoc(projectRef);
+
+      if (projectSnap.exists()) {
+        const data = projectSnap.data();
+        if (data.columns) {
+          setColumns(data.columns);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading columns from Firestore:", error);
+    }
+  };
+
+  // Add this useEffect to load columns on component mount
+  useEffect(() => {
+    loadColumnsFromFirestore();
+  }, []);
+
+  useEffect(() => {
+    loadColumnsFromFirestore();
+  }, []);
+
+  const updateColumns = (newColumns) => {
+    setColumns(newColumns);
+    saveColumnsToFirestore(newColumns);
   };
 
   const handleDrop = (e, targetColumnId) => {
@@ -127,108 +167,207 @@ const KanbanBoard = () => {
       return;
     }
 
-    setColumns((prevColumns) => {
-      const updatedColumns = prevColumns.map((column) => {
-        if (column.id === sourceColumnId) {
-          return {
-            ...column,
-            tasks: column.tasks.filter((t) => t.id !== task.id),
-          };
-        }
-        return column;
-      });
-
-      return updatedColumns.map((column) => {
-        if (column.id === targetColumnId) {
-          return {
-            ...column,
-            tasks: [...column.tasks, task],
-          };
-        }
-        return column;
-      });
+    const updatedColumns = columns.map((column) => {
+      if (column.id === sourceColumnId) {
+        return {
+          ...column,
+          tasks: column.tasks.filter((t) => t.id !== task.id),
+        };
+      }
+      if (column.id === targetColumnId) {
+        return {
+          ...column,
+          tasks: [...column.tasks, { ...task, columnId: targetColumnId }],
+        };
+      }
+      return column;
     });
 
+    updateColumns(updatedColumns);
     setDraggedTask(null);
   };
 
   const editTask = (task, columnId) => {
-    setCurrentTask({ ...task });
+    setCurrentTask(task);
     setCurrentColumn(columnId);
-    setOriginalColumn(columnId);
     setShowTaskModal(true);
-    setTaskMenuOpen(null);
-  };
-
-  const deleteTask = (taskId, columnId) => {
-    setColumns((prevColumns) =>
-      prevColumns.map((column) => {
-        if (column.id === columnId) {
-          return {
-            ...column,
-            tasks: column.tasks.filter((task) => task.id !== taskId),
-          };
-        }
-        return column;
-      })
-    );
+    setIsAddingNewTask(false);
     setTaskMenuOpen(null);
   };
 
   const saveTask = () => {
+    // Validate task name
     if (!currentTask.name.trim()) {
+      alert("Task name cannot be empty");
       return;
     }
 
-    setColumns((prevColumns) => {
-      let updatedColumns = [...prevColumns];
+    const updatedColumns = columns.map((column) => {
+      if (column.id === currentColumn) {
+        // If the task already exists, replace it
+        const existingTaskIndex = column.tasks.findIndex(
+          (t) => t.id === currentTask.id
+        );
 
-      if (originalColumn) {
-        updatedColumns = updatedColumns.map((column) => {
-          if (column.id === originalColumn) {
-            return {
-              ...column,
-              tasks: column.tasks.filter((task) => task.id !== currentTask.id),
-            };
-          }
-          return column;
-        });
-      }
-
-      return updatedColumns.map((column) => {
-        if (column.id === currentColumn) {
+        if (existingTaskIndex !== -1) {
+          const updatedTasks = [...column.tasks];
+          updatedTasks[existingTaskIndex] = currentTask;
           return {
             ...column,
-            tasks: [...column.tasks, currentTask],
+            tasks: updatedTasks,
           };
         }
-        return column;
-      });
+
+        // If it's a new task, add it to the tasks array
+        return {
+          ...column,
+          tasks: [...column.tasks, currentTask],
+        };
+      }
+      return column;
     });
 
+    updateColumns(updatedColumns);
     setShowTaskModal(false);
     setCurrentTask(null);
     setCurrentColumn(null);
-    setOriginalColumn(null);
+  };
+
+  const deleteTask = (taskId, columnId) => {
+    const updatedColumns = columns.map((column) => {
+      if (column.id === columnId) {
+        return {
+          ...column,
+          tasks: column.tasks.filter((task) => task.id !== taskId),
+        };
+      }
+      return column;
+    });
+
+    updateColumns(updatedColumns);
+    setTaskMenuOpen(null);
   };
 
   const toggleTaskMenu = (taskId) => {
     setTaskMenuOpen(taskMenuOpen === taskId ? null : taskId);
   };
 
+  useEffect(() => {
+    if (lastEditedField === "name" && taskNameInputRef.current) {
+      taskNameInputRef.current.focus();
+    } else if (
+      lastEditedField === "description" &&
+      descriptionInputRef.current
+    ) {
+      descriptionInputRef.current.focus();
+    }
+  }, [currentTask, lastEditedField]);
+
   const handleTaskInputChange = (field, value) => {
-    setCurrentTask((prevTask) => ({
-      ...prevTask,
-      [field]: value,
-    }));
+    setLastEditedField(field); // Track the last field edited
+
+    // Get the input reference dynamically
+    const inputRef =
+      field === "name" ? taskNameInputRef.current : descriptionInputRef.current;
+
+    if (inputRef) {
+      const cursorPosition = inputRef.selectionStart; // Save cursor position
+
+      setCurrentTask((prevTask) => {
+        if (prevTask?.[field] === value) return prevTask;
+        return { ...prevTask, [field]: value };
+      });
+
+      setTimeout(() => {
+        if (inputRef) {
+          inputRef.selectionStart = cursorPosition; // Restore cursor position
+          inputRef.selectionEnd = cursorPosition;
+        }
+      }, 0); // Timeout ensures it runs **after** re-render
+    }
   };
 
-  const handleTitleSave = () => {
-    if (editedTitle.trim()) {
-      setBoardTitle(editedTitle);
+  const startAddingNewTask = () => {
+    const newTask = {
+      id: generateId(),
+      name: "",
+      description: "",
+      priority: "medium",
+      assignee: "",
+    };
+
+    setCurrentTask(newTask);
+    setCurrentColumn("todo");
+    setShowTaskModal(true);
+    setIsAddingNewTask(true);
+  };
+
+  useEffect(() => {
+    const fetchBoardTitle = async () => {
+      try {
+        const titleRef = doc(db, "projects", projectId, "TITLE", "title");
+        const titleSnap = await getDoc(titleRef);
+
+        if (titleSnap.exists()) {
+          const data = titleSnap.data();
+          if (data.title) {
+            setBoardTitle(data.title);
+          }
+        } else {
+          // If no title exists, set a default title and save it to Firestore
+          const defaultTitle = "My Project";
+          await setDoc(titleRef, { title: defaultTitle });
+          setBoardTitle(defaultTitle);
+        }
+      } catch (error) {
+        console.error("Error loading board title:", error);
+      }
+    };
+
+    fetchBoardTitle();
+  }, [projectId]);
+
+  const handleTitleSave = async () => {
+    if (editedTitle.trim() && projectId) {
+      try {
+        // Update local state
+        setBoardTitle(editedTitle);
+
+        // Update Firebase
+        const titleRef = doc(db, "projects", projectId, "TITLE", "title");
+        await updateDoc(titleRef, {
+          title: editedTitle,
+        });
+
+        console.log(`Title updated successfully for ${projectId}`);
+      } catch (error) {
+        console.error("Error updating project title: ", error);
+      }
     }
     setIsEditingTitle(false);
   };
+
+  useEffect(() => {
+    if (!projectId) return;
+
+    const projectRef = doc(db, "projects", projectId, "Tasks", "Tasks");
+
+    // Listen for real-time updates to the columns
+    const unsubscribe = onSnapshot(projectRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.columns) {
+          setColumns(data.columns);
+        }
+      }
+    });
+
+    return () => unsubscribe(); // Cleanup listener when component unmounts
+  }, [projectId]);
+
+  useEffect(() => {
+    setEditedTitle(boardTitle);
+  }, [boardTitle]);
 
   const NavItem = ({ icon: Icon, label, id }) => (
     <button
@@ -237,8 +376,8 @@ const KanbanBoard = () => {
         isSidebarOpen ? "px-4" : "px-2 justify-center"
       } py-3 rounded-lg transition-all duration-300 ${
         activeTab === id
-          ? "text-white backdrop-blur-lg bg-white/20 shadow-lg" // Enhanced glass effect for active items
-          : "text-white text-opacity-70 bg-transparent hover:text-white hover:backdrop-blur-md hover:bg-white/10" // No effect in default state, only on hover
+          ? "text-white backdrop-blur-lg bg-white/20 shadow-lg"
+          : "text-white text-opacity-70 bg-transparent hover:text-white hover:backdrop-blur-md hover:bg-white/10"
       }`}
       style={{
         outline: "none",
@@ -249,6 +388,7 @@ const KanbanBoard = () => {
       {isSidebarOpen && <span className="ml-2 font-medium">{label}</span>}
     </button>
   );
+
   const TaskModal = () => (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
       <div
@@ -261,7 +401,7 @@ const KanbanBoard = () => {
             isDarkMode ? "text-white" : "text-gray-800"
           }`}
         >
-          Add Task
+          {isAddingNewTask ? "Add Task" : "Edit Task"}
         </h2>
 
         <div className="mb-4">
@@ -295,6 +435,7 @@ const KanbanBoard = () => {
             Description
           </label>
           <textarea
+            ref={descriptionInputRef}
             className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
               isDarkMode
                 ? "bg-gray-700 border-gray-600 text-white"
@@ -496,21 +637,9 @@ const KanbanBoard = () => {
                   {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
                 </button>
 
-                {/* Only show the Add Task button when the tasks tab is active */}
                 {activeTab === "tasks" && (
                   <button
-                    onClick={() => {
-                      setCurrentTask({
-                        id: generateId(),
-                        name: "",
-                        description: "",
-                        priority: "medium",
-                        assignee: "",
-                      });
-                      setCurrentColumn("todo");
-                      setShowTaskModal(true);
-                      setIsAddingNewTask(true);
-                    }}
+                    onClick={startAddingNewTask}
                     className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center space-x-2 shadow-md"
                   >
                     <Plus size={20} />
