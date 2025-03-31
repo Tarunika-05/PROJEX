@@ -47,64 +47,7 @@ const KanbanBoard = () => {
     setIsDarkMode(!isDarkMode);
   };
 
-  const [columns, setColumns] = useState([
-    {
-      id: "todo",
-      title: "To Do",
-      color: "bg-gradient-to-br from-pink-500 to-purple-600",
-      tasks: [
-        {
-          id: 1,
-          name: "Design System",
-          description: "Create design system for the entire application",
-          priority: "high",
-          assignee: "JS",
-        },
-        {
-          id: 2,
-          name: "User Research",
-          description: "Conduct user interviews and create personas",
-          priority: "medium",
-          assignee: "AK",
-        },
-      ],
-    },
-    {
-      id: "progress",
-      title: "In Progress",
-      color: "bg-gradient-to-br from-blue-500 to-cyan-600",
-      tasks: [
-        {
-          id: 3,
-          name: "Dashboard UI",
-          description: "Implement the dashboard UI components",
-          priority: "high",
-          assignee: "JS",
-        },
-        {
-          id: 4,
-          name: "API Integration",
-          description: "Integrate the frontend with backend APIs",
-          priority: "medium",
-          assignee: "TL",
-        },
-      ],
-    },
-    {
-      id: "done",
-      title: "Done",
-      color: "bg-gradient-to-br from-green-500 to-emerald-600",
-      tasks: [
-        {
-          id: 5,
-          name: "Project Setup",
-          description: "Initialize the project repository and structure",
-          priority: "low",
-          assignee: "JS",
-        },
-      ],
-    },
-  ]);
+  const [columns, setColumns] = useState([]);
 
   const handleDragStart = (task, columnId) => {
     setDraggedTask({ task, sourceColumnId: columnId });

@@ -16,7 +16,9 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
-
+.modal-open {
+  overflow: hidden;
+}
 a {
   font-weight: 500;
   color: #646cff;

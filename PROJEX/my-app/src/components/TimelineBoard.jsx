@@ -1,64 +1,234 @@
-import React, { useState } from "react";
-import { Clock, Plus, X } from "lucide-react";
-
+import React, { useState, useEffect } from "react";
+import { Clock, Plus, X, Calendar as CalendarIcon } from "lucide-react";
+import { db } from "../firebase/firebaseConfig";
+import { doc, getDoc, updateDoc, setDoc, arrayUnion } from "firebase/firestore";
+// Import Firestore functions
+const projectId = "project1";
 const Timeline = ({ isDarkMode = false }) => {
   const [isAddingEvent, setIsAddingEvent] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
   const [newEvent, setNewEvent] = useState({
     title: "",
     date: "",
+    time: "",
     category: "meeting",
     description: "",
   });
 
-  const [timelineEvents, setTimelineEvents] = useState([
-    {
-      id: 1,
-      title: "Project Kickoff",
-      date: "Jan 15, 2025",
-      category: "meeting",
-      description: "Initial team meeting and project planning",
-    },
-    {
-      id: 2,
-      title: "Research Phase",
-      date: "Jan 20, 2025",
-      category: "research",
-      description: "Market analysis and competitor research",
-    },
-    {
-      id: 3,
-      title: "Design Sprint",
-      date: "Feb 15, 2025",
-      category: "design",
-      description: "UI/UX design workshop",
-    },
-    {
-      id: 4,
-      title: "Development Start",
-      date: "Mar 1, 2025",
-      category: "development",
-      description: "Begin frontend development",
-    },
-  ]);
+  const [timelineEvents, setTimelineEvents] = useState([]);
 
-  const handleAddEvent = (e) => {
+  // Sort events chronologically
+  useEffect(() => {
+    const sortedEvents = [...timelineEvents].sort(
+      (a, b) => a.timestamp - b.timestamp
+    );
+    setTimelineEvents(sortedEvents);
+  }, []);
+
+  const projectId = "project1";
+
+  useEffect(() => {
+    const fetchTimelineEvents = async () => {
+      try {
+        const timelineRef = doc(
+          db,
+          "projects",
+          projectId,
+          "timeline",
+          "timeline"
+        );
+        const timelineSnap = await getDoc(timelineRef);
+
+        if (timelineSnap.exists()) {
+          const events = timelineSnap.data().events || [];
+          setTimelineEvents(events.sort((a, b) => a.timestamp - b.timestamp)); // Sort by timestamp
+        } else {
+          console.log("No timeline events found in Firestore.");
+        }
+      } catch (error) {
+        console.error("Error fetching timeline events:", error);
+      }
+    };
+
+    fetchTimelineEvents();
+  }, [projectId]); // Runs when projectId changes
+
+  // Component for the Add Event popup
+  const AddEventPopup = ({
+    newEvent,
+    setNewEvent,
+    handleAddEvent,
+    setIsAddingEvent,
+  }) => {
+    return (
+      <div className="add-event-popup">
+        <h3>Add New Event</h3>
+        <form onSubmit={handleAddEvent}>
+          <div className="form-group">
+            <label>Title</label>
+            <input
+              type="text"
+              value={newEvent.title}
+              onChange={(e) =>
+                setNewEvent({ ...newEvent, title: e.target.value })
+              }
+              placeholder="Event title"
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Date</label>
+            <input
+              type="date"
+              value={newEvent.date}
+              onChange={(e) =>
+                setNewEvent({ ...newEvent, date: e.target.value })
+              }
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Time</label>
+            <input
+              type="time"
+              value={newEvent.time}
+              onChange={(e) =>
+                setNewEvent({ ...newEvent, time: e.target.value })
+              }
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Category</label>
+            <select
+              value={newEvent.category}
+              onChange={(e) =>
+                setNewEvent({ ...newEvent, category: e.target.value })
+              }
+            >
+              <option value="meeting">Meeting</option>
+              <option value="deadline">Deadline</option>
+              <option value="milestone">Milestone</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label>Description</label>
+            <textarea
+              value={newEvent.description}
+              onChange={(e) =>
+                setNewEvent({ ...newEvent, description: e.target.value })
+              }
+              placeholder="Event description"
+            />
+          </div>
+
+          <div className="form-actions">
+            <button type="submit">Add Event</button>
+            <button type="button" onClick={() => setIsAddingEvent(false)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  };
+
+  // The handleAddEvent function
+  const handleAddEvent = async (e) => {
     e.preventDefault();
-    if (newEvent.title && newEvent.date && newEvent.description) {
-      setTimelineEvents([
-        ...timelineEvents,
-        {
-          id: timelineEvents.length + 1,
-          ...newEvent,
-        },
-      ]);
-      setNewEvent({
-        title: "",
-        date: "",
-        category: "meeting",
-        description: "",
-      });
-      setIsAddingEvent(false);
+
+    if (newEvent.title) {
+      // Use current date if date is missing
+      const eventDate = newEvent.date || new Date().toISOString().split("T")[0];
+
+      let timestamp;
+      try {
+        const timeString = newEvent.time || "00:00";
+        const dateTimeString = `${eventDate} ${timeString}`;
+        timestamp = new Date(dateTimeString).getTime();
+      } catch (error) {
+        console.error("Date parsing error:", error);
+        timestamp = Date.now();
+      }
+
+      const newEventWithTimestamp = {
+        id: Date.now(),
+        ...newEvent,
+        date: eventDate, // Ensure the date field is set
+        timestamp: isNaN(timestamp) ? Date.now() : timestamp,
+      };
+
+      try {
+        const timelineRef = doc(
+          db,
+          "projects",
+          projectId,
+          "timeline",
+          "timeline"
+        );
+
+        // Get the existing document to preserve old events
+        const timelineSnap = await getDoc(timelineRef);
+        let existingEvents = [];
+
+        if (timelineSnap.exists()) {
+          existingEvents = timelineSnap.data().events || [];
+        }
+
+        // Append new event while keeping existing ones
+        const updatedEvents = [...existingEvents, newEventWithTimestamp].sort(
+          (a, b) => a.timestamp - b.timestamp
+        );
+
+        // Update Firestore with the new array (keeps all events)
+        await updateDoc(timelineRef, { events: updatedEvents });
+
+        console.log("Event added to Firestore successfully");
+
+        // Update local state correctly
+        setTimelineEvents(updatedEvents);
+
+        // Reset form
+        setNewEvent({
+          title: "",
+          date: "",
+          time: "",
+          category: "meeting",
+          description: "",
+        });
+
+        setIsAddingEvent(false);
+      } catch (error) {
+        console.error("Error adding event to Firestore:", error);
+      }
+    } else {
+      console.error("Error: Event title is required");
+      // Optionally set an error state to display in the UI
     }
+  };
+
+  const formatDateString = (dateStr) => {
+    // For formatting date from picker to display format
+    if (!dateStr) return "";
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr; // Return as-is if invalid
+
+      const options = { month: "short", day: "numeric", year: "numeric" };
+      return date.toLocaleDateString("en-US", options);
+    } catch (e) {
+      return dateStr; // Return original string if formatting fails
+    }
+  };
+
+  const handleDateSelect = (dateStr) => {
+    const formattedDate = formatDateString(dateStr);
+    setNewEvent({ ...newEvent, date: formattedDate });
+    setShowCalendar(false);
   };
 
   const getCategoryStyle = (category) => {
@@ -136,6 +306,119 @@ const Timeline = ({ isDarkMode = false }) => {
     }
   };
 
+  // Simple Calendar component
+  const Calendar = ({ onSelectDate, onClose }) => {
+    const [currentDate, setCurrentDate] = useState(new Date());
+    const [selectedDate, setSelectedDate] = useState(null);
+
+    const getDaysInMonth = (year, month) => {
+      return new Date(year, month + 1, 0).getDate();
+    };
+
+    const getFirstDayOfMonth = (year, month) => {
+      return new Date(year, month, 1).getDay();
+    };
+
+    const handlePrevMonth = () => {
+      setCurrentDate(
+        new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1)
+      );
+    };
+
+    const handleNextMonth = () => {
+      setCurrentDate(
+        new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1)
+      );
+    };
+
+    const handleDateClick = (day) => {
+      const selected = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth(),
+        day
+      );
+      setSelectedDate(selected);
+      onSelectDate(selected.toISOString().split("T")[0]);
+    };
+
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const daysInMonth = getDaysInMonth(year, month);
+    const firstDay = getFirstDayOfMonth(year, month);
+
+    const monthName = currentDate.toLocaleString("default", { month: "long" });
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+    const calendarDays = [];
+    for (let i = 0; i < firstDay; i++) {
+      calendarDays.push(null);
+    }
+    for (let i = 1; i <= daysInMonth; i++) {
+      calendarDays.push(i);
+    }
+
+    return (
+      <div
+        className={`p-4 rounded-lg shadow-lg ${
+          isDarkMode ? "bg-gray-800" : "bg-white"
+        } border`}
+      >
+        <div className="flex justify-between items-center mb-4">
+          <button
+            type="button"
+            onClick={handlePrevMonth}
+            className="p-1 rounded hover:bg-opacity-10 hover:bg-gray-500"
+          >
+            &lt;
+          </button>
+          <div className="font-semibold">{`${monthName} ${year}`}</div>
+          <button
+            type="button"
+            onClick={handleNextMonth}
+            className="p-1 rounded hover:bg-opacity-10 hover:bg-gray-500"
+          >
+            &gt;
+          </button>
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {days.map((day) => (
+            <div key={day} className="text-center text-sm font-medium p-1">
+              {day}
+            </div>
+          ))}
+          {calendarDays.map((day, index) => (
+            <div
+              key={index}
+              className={`text-center p-1 cursor-pointer rounded ${
+                day
+                  ? isDarkMode
+                    ? "hover:bg-gray-700"
+                    : "hover:bg-gray-100"
+                  : ""
+              }`}
+              onClick={() => day && handleDateClick(day)}
+            >
+              {day || ""}
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className={`px-3 py-1 rounded ${
+              isDarkMode
+                ? "bg-gray-700 hover:bg-gray-600"
+                : "bg-gray-200 hover:bg-gray-300"
+            }`}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div
       className={`${
@@ -153,6 +436,7 @@ const Timeline = ({ isDarkMode = false }) => {
           Timeline
         </h2>
         <button
+          type="button"
           onClick={() => setIsAddingEvent(true)}
           className="flex items-center px-4 py-2 bg-gradient-to-r from-indigo-500 to-indigo-700 text-white rounded-lg hover:from-indigo-600 hover:to-indigo-800 transition-colors shadow-md"
         >
@@ -190,15 +474,48 @@ const Timeline = ({ isDarkMode = false }) => {
                   }
                   className="w-full px-3 py-2 rounded-lg border bg-transparent focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
+
+                {/* Date field with calendar icon */}
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Date (e.g., Jan 15, 2025)"
+                    value={newEvent.date}
+                    onChange={(e) =>
+                      setNewEvent({ ...newEvent, date: e.target.value })
+                    }
+                    className="w-full px-3 py-2 rounded-lg border bg-transparent focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCalendar(!showCalendar)}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2"
+                  >
+                    <CalendarIcon size={16} />
+                  </button>
+
+                  {/* Calendar popup */}
+                  {showCalendar && (
+                    <div className="absolute mt-2 right-0 z-10">
+                      <Calendar
+                        onSelectDate={handleDateSelect}
+                        onClose={() => setShowCalendar(false)}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Time field */}
                 <input
-                  type="text"
-                  placeholder="Date (e.g., Jan 15, 2025)"
-                  value={newEvent.date}
+                  type="time"
+                  placeholder="Time"
+                  value={newEvent.time}
                   onChange={(e) =>
-                    setNewEvent({ ...newEvent, date: e.target.value })
+                    setNewEvent({ ...newEvent, time: e.target.value })
                   }
                   className="w-full px-3 py-2 rounded-lg border bg-transparent focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
+
                 <select
                   value={newEvent.category}
                   onChange={(e) =>
@@ -297,7 +614,7 @@ const Timeline = ({ isDarkMode = false }) => {
                           } px-2 py-1 rounded-full backdrop-blur-sm`}
                         >
                           <Clock size={14} className="inline mr-1" />
-                          {event.date}
+                          {event.date} {event.time ? `at ${event.time}` : ""}
                         </span>
                       </div>
                     </div>

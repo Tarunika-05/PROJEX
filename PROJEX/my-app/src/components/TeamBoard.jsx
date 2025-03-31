@@ -1,6 +1,18 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Menu, X, Edit2, Check, Users, Plus, PlusCircle } from "lucide-react";
 import { Trash2 } from "lucide-react";
+import { db } from "../firebase/firebaseConfig"; // Ensure Firebase is initialized
+import {
+  doc,
+  setDoc,
+  updateDoc,
+  arrayUnion,
+  arrayRemove,
+  getDoc,
+  collection,
+  getDocs,
+  deleteDoc,
+} from "firebase/firestore";
 
 const IconMoon = () => (
   <svg
@@ -52,46 +64,7 @@ const TeamBoard = () => {
     type: null,
     id: null,
   });
-
-  const handleUpdateMember = () => {
-    if (!editingMember) return;
-
-    setRoles(
-      roles.map((role) => ({
-        ...role,
-        members: role.members.map((member) =>
-          member.id === editingMember.id ? editingMember : member
-        ),
-      }))
-    );
-
-    setEditingMember(null);
-  };
-
-  const handleUpdateDepartment = () => {
-    if (!editingDepartment) return;
-
-    setRoles(
-      roles.map((role) =>
-        role.id === editingDepartment.id ? editingDepartment : role
-      )
-    );
-
-    setEditingDepartment(null);
-  };
-
-  const handleDeleteMember = (memberId) => {
-    setRoles(
-      roles.map((role) => ({
-        ...role,
-        members: role.members.filter((member) => member.id !== memberId),
-      }))
-    );
-  };
-
-  const handleDeleteDepartment = (departmentId) => {
-    setRoles(roles.filter((role) => role.id !== departmentId));
-  };
+  const [isLoading, setIsLoading] = useState(true);
 
   const [newDepartment, setNewDepartment] = useState({
     title: "",
@@ -105,104 +78,293 @@ const TeamBoard = () => {
     status: "active",
   });
 
-  const [roles, setRoles] = useState([
-    {
-      id: "leadership",
-      title: "Leadership",
-      color:
-        "bg-gradient-to-br from-purple-500 to-indigo-600 backdrop-blur-lg bg-opacity-80",
-      members: [
-        {
-          id: 1,
-          name: "Sarah Johnson",
-          role: "Project Manager",
-          status: "active",
-        },
-        {
-          id: 2,
-          name: "Mike Chen",
-          role: "Tech Lead",
-          status: "active",
-        },
-      ],
-    },
-    {
-      id: "engineering",
-      title: "Engineering",
-      color:
-        "bg-gradient-to-br from-blue-500 to-cyan-600 backdrop-blur-lg bg-opacity-80",
-      members: [
-        {
-          id: 3,
-          name: "Alex Kumar",
-          role: "Senior Developer",
-          status: "busy",
-        },
-        {
-          id: 4,
-          name: "Rachel Lee",
-          role: "Frontend Developer",
-          status: "active",
-        },
-      ],
-    },
-    {
-      id: "design",
-      title: "Design",
-      color:
-        "bg-gradient-to-br from-pink-500 to-rose-600 backdrop-blur-lg bg-opacity-80",
-      members: [
-        {
-          id: 5,
-          name: "David Park",
-          role: "UI Designer",
-          status: "offline",
-        },
-      ],
-    },
-  ]);
+  const [roles, setRoles] = useState([]);
 
-  const handleAddDepartment = () => {
-    const newId = newDepartment.title.toLowerCase().replace(/\s+/g, "-");
-    const newDept = {
-      id: newId,
-      title: newDepartment.title,
-      color: `bg-gradient-to-br ${newDepartment.color} backdrop-blur-lg bg-opacity-80`,
-      members: [],
+  // Load all departments on component mount
+  useEffect(() => {
+    // Modify the loadDepartments function inside the useEffect
+
+    const loadDepartments = async () => {
+      try {
+        setIsLoading(true);
+        const teamsCollectionRef = collection(db, "projects/project1/team");
+        const teamsSnapshot = await getDocs(teamsCollectionRef);
+
+        const departmentsData = [];
+        teamsSnapshot.forEach((doc) => {
+          const data = doc.data();
+
+          // Make sure color has the proper format
+          let color =
+            data.color ||
+            "bg-gradient-to-br from-blue-500 to-cyan-600 backdrop-blur-lg bg-opacity-80";
+
+          // If color doesn't have the proper prefix, add it
+          if (!color.startsWith("bg-gradient-to-br")) {
+            color = `bg-gradient-to-br ${color} backdrop-blur-lg bg-opacity-80`;
+          }
+
+          departmentsData.push({
+            id: doc.id,
+            title: data.title || "Unnamed Department",
+            color: color,
+            members: data.members || [],
+          });
+        });
+
+        setRoles(departmentsData);
+        console.log("Loaded departments:", departmentsData);
+      } catch (error) {
+        console.error("Error loading departments:", error);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
-    setRoles([...roles, newDept]);
-    setNewDepartment({ title: "", color: "from-blue-500 to-cyan-600" });
-    setShowAddModal(false);
+    loadDepartments();
+  }, []);
+
+  const handleUpdateMember = async () => {
+    if (!editingMember) return;
+
+    try {
+      const departmentId = editingMember.departmentId;
+      const departmentRef = doc(db, "projects/project1/team", departmentId);
+
+      // Get the current department data
+      const departmentSnapshot = await getDoc(departmentRef);
+      if (!departmentSnapshot.exists()) {
+        console.error("Department not found:", departmentId);
+        return;
+      }
+
+      const departmentData = departmentSnapshot.data();
+      const members = departmentData.members || [];
+
+      // Find and update the member in the array
+      const updatedMembers = members.map((member) =>
+        member.id === editingMember.id
+          ? {
+              id: editingMember.id,
+              name: editingMember.name,
+              role: editingMember.role,
+              status: editingMember.status,
+            }
+          : member
+      );
+
+      // Update Firestore
+      await updateDoc(departmentRef, {
+        members: updatedMembers,
+      });
+
+      // Update local state
+      setRoles((prevRoles) =>
+        prevRoles.map((role) => {
+          if (role.id === departmentId) {
+            return {
+              ...role,
+              members: updatedMembers,
+            };
+          }
+          return role;
+        })
+      );
+
+      // Clear editing state
+      setEditingMember(null);
+    } catch (error) {
+      console.error("Error updating member:", error);
+    }
   };
 
-  const handleAddMember = () => {
-    const newMemberObj = {
-      id: Date.now(),
-      name: newMember.name,
-      role: newMember.role,
-      status: newMember.status,
-    };
+  const handleUpdateDepartment = async () => {
+    if (!editingDepartment) return;
 
-    setRoles(
-      roles.map((role) => {
-        if (role.id === newMember.departmentId) {
-          return {
-            ...role,
-            members: [...role.members, newMemberObj],
-          };
-        }
-        return role;
-      })
-    );
+    try {
+      const departmentRef = doc(
+        db,
+        "projects/project1/team",
+        editingDepartment.id
+      );
 
-    setNewMember({
-      name: "",
-      role: "",
-      departmentId: "",
-      status: "active",
-    });
-    setShowAddModal(false);
+      // Extract just the color part without the prefixes
+      let colorValue = editingDepartment.color;
+      if (colorValue.includes("bg-gradient-to-br")) {
+        colorValue = colorValue
+          .replace("bg-gradient-to-br ", "")
+          .replace(" backdrop-blur-lg bg-opacity-80", "");
+      }
+
+      // Update Firestore with just the color value
+      await updateDoc(departmentRef, {
+        title: editingDepartment.title,
+        color: colorValue,
+      });
+
+      // For local state, use the full class string
+      const fullColor = `bg-gradient-to-br ${colorValue} backdrop-blur-lg bg-opacity-80`;
+
+      // Update local state
+      setRoles((prevRoles) =>
+        prevRoles.map((role) =>
+          role.id === editingDepartment.id
+            ? {
+                ...editingDepartment,
+                color: fullColor,
+              }
+            : role
+        )
+      );
+
+      // Clear editing state
+      setEditingDepartment(null);
+    } catch (error) {
+      console.error("Error updating department:", error);
+    }
+  };
+
+  const handleDeleteMember = async (memberId) => {
+    try {
+      // Find the department containing this member
+      const department = roles.find((role) =>
+        role.members.some((member) => member.id === memberId)
+      );
+
+      if (!department) {
+        console.error("Department for member not found:", memberId);
+        return;
+      }
+
+      const departmentRef = doc(db, "projects/project1/team", department.id);
+
+      // Get member to remove
+      const memberToRemove = department.members.find((m) => m.id === memberId);
+      if (!memberToRemove) return;
+
+      // Remove from Firestore
+      await updateDoc(departmentRef, {
+        members: arrayRemove(memberToRemove),
+      });
+
+      // Update local state
+      setRoles((prevRoles) =>
+        prevRoles.map((role) => {
+          if (role.id === department.id) {
+            return {
+              ...role,
+              members: role.members.filter((member) => member.id !== memberId),
+            };
+          }
+          return role;
+        })
+      );
+    } catch (error) {
+      console.error("Error deleting member:", error);
+    }
+  };
+
+  const handleDeleteDepartment = async (departmentId) => {
+    try {
+      // Delete from Firestore
+      const departmentRef = doc(db, "projects/project1/team", departmentId);
+      await deleteDoc(departmentRef);
+
+      // Update local state
+      setRoles((prevRoles) =>
+        prevRoles.filter((role) => role.id !== departmentId)
+      );
+    } catch (error) {
+      console.error("Error deleting department:", error);
+    }
+  };
+
+  const handleAddDepartment = async () => {
+    if (!newDepartment.title.trim()) return;
+
+    try {
+      const newId = newDepartment.title.toLowerCase().replace(/\s+/g, "-");
+      const newDeptRef = doc(db, "projects/project1/team", newId);
+
+      // Use consistent color format
+      const colorValue = newDepartment.color;
+      const fullColorClass = `bg-gradient-to-br ${colorValue} backdrop-blur-lg bg-opacity-80`;
+
+      const newDept = {
+        id: newId,
+        title: newDepartment.title,
+        color: fullColorClass,
+        members: [], // Empty initially
+      };
+
+      // Save to Firestore with consistent format
+      await setDoc(newDeptRef, {
+        title: newDepartment.title,
+        color: colorValue, // Store just the color part without prefixes for consistency
+        members: [],
+      });
+
+      // Update local state
+      setRoles([...roles, newDept]);
+      setNewDepartment({ title: "", color: "from-blue-500 to-cyan-600" });
+      setShowAddModal(false);
+    } catch (error) {
+      console.error("Error adding department:", error);
+    }
+  };
+  const handleAddMember = async () => {
+    if (
+      !newMember.departmentId.trim() ||
+      !newMember.name.trim() ||
+      !newMember.role.trim()
+    ) {
+      alert("Please provide valid details");
+      return;
+    }
+
+    try {
+      const newMemberObj = {
+        id: Date.now(),
+        name: newMember.name,
+        role: newMember.role,
+        status: newMember.status || "active",
+      };
+
+      const departmentRef = doc(
+        db,
+        "projects/project1/team",
+        newMember.departmentId
+      );
+
+      // Update Firestore
+      await updateDoc(departmentRef, {
+        members: arrayUnion(newMemberObj),
+      });
+
+      // Update local state
+      setRoles((prevRoles) =>
+        prevRoles.map((dept) => {
+          if (dept.id === newMember.departmentId) {
+            return {
+              ...dept,
+              members: [...dept.members, newMemberObj],
+            };
+          }
+          return dept;
+        })
+      );
+
+      // Reset form state
+      setNewMember({
+        name: "",
+        role: "",
+        departmentId: "",
+        status: "active",
+      });
+      setShowAddModal(false);
+    } catch (error) {
+      console.error("Error adding member:", error);
+    }
   };
 
   const handleDragStart = (member, sourceRoleId) => {
@@ -213,7 +375,7 @@ const TeamBoard = () => {
     e.preventDefault();
   };
 
-  const handleDrop = (targetRoleId) => {
+  const handleDrop = async (targetRoleId) => {
     if (!draggedMember) return;
     const { member, sourceRoleId } = draggedMember;
 
@@ -222,26 +384,45 @@ const TeamBoard = () => {
       return;
     }
 
-    setRoles((prevRoles) => {
-      const newRoles = prevRoles.map((role) => {
-        if (role.id === sourceRoleId) {
-          return {
-            ...role,
-            members: role.members.filter((m) => m.id !== member.id),
-          };
-        }
-        if (role.id === targetRoleId) {
-          return {
-            ...role,
-            members: [...role.members, member],
-          };
-        }
-        return role;
-      });
-      return newRoles;
-    });
+    try {
+      // Source and target department references
+      const sourceDeptRef = doc(db, "projects/project1/team", sourceRoleId);
+      const targetDeptRef = doc(db, "projects/project1/team", targetRoleId);
 
-    setDraggedMember(null);
+      // 1. Remove member from source department
+      await updateDoc(sourceDeptRef, {
+        members: arrayRemove(member),
+      });
+
+      // 2. Add member to target department
+      await updateDoc(targetDeptRef, {
+        members: arrayUnion(member),
+      });
+
+      // Update local state
+      setRoles((prevRoles) => {
+        const newRoles = prevRoles.map((role) => {
+          if (role.id === sourceRoleId) {
+            return {
+              ...role,
+              members: role.members.filter((m) => m.id !== member.id),
+            };
+          }
+          if (role.id === targetRoleId) {
+            return {
+              ...role,
+              members: [...role.members, member],
+            };
+          }
+          return role;
+        });
+        return newRoles;
+      });
+    } catch (error) {
+      console.error("Error moving member between departments:", error);
+    } finally {
+      setDraggedMember(null);
+    }
   };
 
   const getStatusColor = (status) => {
@@ -261,6 +442,14 @@ const TeamBoard = () => {
     setBoardTitle(editedTitle);
     setIsEditingTitle(false);
   };
+
+  if (isLoading) {
+    return (
+      <div className="h-full w-full flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -642,8 +831,8 @@ const TeamBoard = () => {
                       {role.title}
                     </h3>
                     <p className="text-white text-opacity-80 text-sm">
-                      {role.members.length} member
-                      {role.members.length !== 1 ? "s" : ""}
+                      {role.members?.length || 0} member
+                      {(role.members?.length || 0) !== 1 ? "s" : ""}
                     </p>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -670,57 +859,65 @@ const TeamBoard = () => {
                 </div>
                 <div className="p-4">
                   <div className="space-y-4">
-                    {role.members.map((member) => (
-                      <div
-                        key={member.id}
-                        className="flex items-center justify-between bg-white bg-opacity-50 backdrop-blur-sm p-3 rounded-lg cursor-move hover:bg-opacity-70 transition-colors"
-                        draggable
-                        onDragStart={() => handleDragStart(member, role.id)}
-                      >
-                        <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center shadow-sm">
-                            {member.name.charAt(0)}
+                    {role.members &&
+                      role.members.map((member) => (
+                        <div
+                          key={member.id}
+                          className="flex items-center justify-between bg-white bg-opacity-50 backdrop-blur-sm p-3 rounded-lg cursor-move hover:bg-opacity-70 transition-colors"
+                          draggable
+                          onDragStart={() => handleDragStart(member, role.id)}
+                        >
+                          <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center shadow-sm">
+                              {member.name.charAt(0)}
+                            </div>
+                            <div>
+                              <h4 className="font-medium text-gray-900">
+                                {member.name}
+                              </h4>
+                              <p className="text-sm text-gray-500">
+                                {member.role}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <h4 className="font-medium text-gray-900">
-                              {member.name}
-                            </h4>
-                            <p className="text-sm text-gray-500">
-                              {member.role}
-                            </p>
+                          <div className="flex items-center space-x-2">
+                            <div
+                              className={`w-2 h-2 rounded-full ${getStatusColor(
+                                member.status
+                              )}`}
+                            ></div>
+                            <div className="flex items-center space-x-1">
+                              <button
+                                onClick={() =>
+                                  setEditingMember({
+                                    ...member,
+                                    departmentId: role.id,
+                                  })
+                                }
+                                className="p-1 text-gray-600 hover:text-indigo-600"
+                              >
+                                <Edit2 size={14} />
+                              </button>
+                              <button
+                                onClick={() =>
+                                  setDeleteConfirmation({
+                                    type: "member",
+                                    id: member.id,
+                                  })
+                                }
+                                className="p-1 text-gray-600 hover:text-red-600"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
                           </div>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <div
-                            className={`w-3 h-3 rounded-full ${getStatusColor(
-                              member.status
-                            )}`}
-                          />
-                          <button
-                            onClick={() =>
-                              setEditingMember({
-                                ...member,
-                                departmentId: role.id,
-                              })
-                            }
-                            className="p-1 text-gray-500 hover:text-gray-700 rounded"
-                          >
-                            <Edit2 size={14} />
-                          </button>
-                          <button
-                            onClick={() =>
-                              setDeleteConfirmation({
-                                type: "member",
-                                id: member.id,
-                              })
-                            }
-                            className="p-1 text-gray-500 hover:text-gray-700 rounded"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
+                      ))}
+                    {(!role.members || role.members.length === 0) && (
+                      <div className="text-center py-6 text-gray-500">
+                        No team members yet
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
               </div>

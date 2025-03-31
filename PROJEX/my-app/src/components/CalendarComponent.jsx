@@ -1,5 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, Edit2, Plus, X, Trash } from "lucide-react";
+import { db } from "../firebase/firebaseConfig"; // Adjust the path based on your setup
+import {
+  collection,
+  getDoc,
+  updateDoc,
+  setDoc,
+  doc,
+  onSnapshot,
+} from "firebase/firestore";
 
 const CalendarComponent = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -14,6 +23,23 @@ const CalendarComponent = () => {
   useEffect(() => {
     localStorage.setItem("darkMode", JSON.stringify(isDarkMode));
   }, [isDarkMode]);
+
+  useEffect(() => {
+    const calendarDocRef = doc(db, "projects/project1/calendar", "eventsDoc");
+
+    // 🔹 Listen for real-time updates from Firestore
+    const unsubscribe = onSnapshot(calendarDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        console.log("Fetched Events on Reload:", docSnap.data().events); // Debugging log
+        setEvents(docSnap.data().events || []);
+      } else {
+        console.log("No events found in Firestore.");
+        setEvents([]);
+      }
+    });
+
+    return () => unsubscribe(); // Cleanup listener when component unmounts
+  }, []);
 
   const [events, setEvents] = useState([
     {
@@ -129,18 +155,39 @@ const CalendarComponent = () => {
     setShowEventModal(true);
   };
 
-  const handleEventSave = () => {
+  const handleEventSave = async () => {
     if (!currentEvent.title.trim()) return;
 
-    if (currentEvent.id) {
-      setEvents(
-        events.map((event) =>
+    const calendarDocRef = doc(db, "projects/project1/calendar", "eventsDoc");
+    const docSnap = await getDoc(calendarDocRef);
+
+    let updatedEvents = [];
+    if (docSnap.exists()) {
+      const existingEvents = docSnap.data().events || [];
+
+      if (currentEvent.id) {
+        // Update existing event
+        updatedEvents = existingEvents.map((event) =>
           event.id === currentEvent.id ? currentEvent : event
-        )
-      );
+        );
+      } else {
+        // Add new event with unique ID
+        updatedEvents = [
+          ...existingEvents,
+          { ...currentEvent, id: Date.now().toString() },
+        ];
+      }
+
+      await updateDoc(calendarDocRef, { events: updatedEvents });
     } else {
-      setEvents([...events, { ...currentEvent, id: Date.now() }]);
+      // If document doesn't exist, create it with first event
+      updatedEvents = [{ ...currentEvent, id: Date.now().toString() }];
+      await setDoc(calendarDocRef, { events: updatedEvents });
     }
+
+    // ✅ Update state immediately so UI reflects changes
+    setEvents(updatedEvents);
+
     setShowEventModal(false);
     setCurrentEvent(null);
   };
@@ -151,8 +198,22 @@ const CalendarComponent = () => {
     setShowEventDetailsModal(false);
   };
 
-  const handleEventDelete = (eventId) => {
-    setEvents(events.filter((event) => event.id !== eventId));
+  const handleEventDelete = async (eventId) => {
+    const calendarDocRef = doc(db, "projects/project1/calendar", "eventsDoc");
+    const docSnap = await getDoc(calendarDocRef);
+
+    if (docSnap.exists()) {
+      const existingEvents = docSnap.data().events || [];
+      const updatedEvents = existingEvents.filter(
+        (event) => event.id !== eventId
+      );
+
+      await updateDoc(calendarDocRef, { events: updatedEvents });
+
+      // ✅ Update state immediately so UI reflects changes
+      setEvents(updatedEvents);
+    }
+
     setShowEventDetailsModal(false);
   };
 
