@@ -1,12 +1,27 @@
 import React, { useState, useEffect } from "react";
-import { Clock, Plus, X, Calendar as CalendarIcon } from "lucide-react";
+import {
+  Clock,
+  Plus,
+  X,
+  Calendar as CalendarIcon,
+  Edit2,
+  Trash2,
+} from "lucide-react";
 import { db } from "../firebase/firebaseConfig";
-import { doc, getDoc, updateDoc, setDoc, arrayUnion } from "firebase/firestore";
-// Import Firestore functions
-const projectId = "project1";
-const Timeline = ({ isDarkMode = false }) => {
+import {
+  doc,
+  getDoc,
+  updateDoc,
+  setDoc,
+  arrayUnion,
+  onSnapshot,
+} from "firebase/firestore";
+
+const Timeline = ({ userId, projectId, isDarkMode = false }) => {
   const [isAddingEvent, setIsAddingEvent] = useState(false);
+  const [isEditingEvent, setIsEditingEvent] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [editingEventId, setEditingEventId] = useState(null);
   const [newEvent, setNewEvent] = useState({
     title: "",
     date: "",
@@ -17,129 +32,43 @@ const Timeline = ({ isDarkMode = false }) => {
 
   const [timelineEvents, setTimelineEvents] = useState([]);
 
-  // Sort events chronologically
+  // Fetch timeline events and setup real-time listener
   useEffect(() => {
-    const sortedEvents = [...timelineEvents].sort(
-      (a, b) => a.timestamp - b.timestamp
+    if (!userId || !projectId) return;
+
+    const timelineRef = doc(
+      db,
+      `users/${userId}/projects/${projectId}/timeline/config`
     );
-    setTimelineEvents(sortedEvents);
-  }, []);
 
-  const projectId = "project1";
-
-  useEffect(() => {
-    const fetchTimelineEvents = async () => {
-      try {
-        const timelineRef = doc(
-          db,
-          "projects",
-          projectId,
-          "timeline",
-          "timeline"
-        );
-        const timelineSnap = await getDoc(timelineRef);
-
-        if (timelineSnap.exists()) {
-          const events = timelineSnap.data().events || [];
-          setTimelineEvents(events.sort((a, b) => a.timestamp - b.timestamp)); // Sort by timestamp
-        } else {
-          console.log("No timeline events found in Firestore.");
-        }
-      } catch (error) {
-        console.error("Error fetching timeline events:", error);
+    // Set up real-time listener for timeline events
+    const unsubscribe = onSnapshot(timelineRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const events = docSnap.data().events || [];
+        setTimelineEvents(events.sort((a, b) => a.timestamp - b.timestamp)); // Sort by timestamp
+      } else {
+        console.log("No timeline events found in Firestore.");
+        // Initialize empty timeline if none exists
+        setDoc(timelineRef, { events: [] }, { merge: true })
+          .then(() => console.log("Timeline initialized successfully"))
+          .catch((error) =>
+            console.error("Error initializing timeline:", error)
+          );
       }
-    };
+    });
 
-    fetchTimelineEvents();
-  }, [projectId]); // Runs when projectId changes
-
-  // Component for the Add Event popup
-  const AddEventPopup = ({
-    newEvent,
-    setNewEvent,
-    handleAddEvent,
-    setIsAddingEvent,
-  }) => {
-    return (
-      <div className="add-event-popup">
-        <h3>Add New Event</h3>
-        <form onSubmit={handleAddEvent}>
-          <div className="form-group">
-            <label>Title</label>
-            <input
-              type="text"
-              value={newEvent.title}
-              onChange={(e) =>
-                setNewEvent({ ...newEvent, title: e.target.value })
-              }
-              placeholder="Event title"
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Date</label>
-            <input
-              type="date"
-              value={newEvent.date}
-              onChange={(e) =>
-                setNewEvent({ ...newEvent, date: e.target.value })
-              }
-              required
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Time</label>
-            <input
-              type="time"
-              value={newEvent.time}
-              onChange={(e) =>
-                setNewEvent({ ...newEvent, time: e.target.value })
-              }
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Category</label>
-            <select
-              value={newEvent.category}
-              onChange={(e) =>
-                setNewEvent({ ...newEvent, category: e.target.value })
-              }
-            >
-              <option value="meeting">Meeting</option>
-              <option value="deadline">Deadline</option>
-              <option value="milestone">Milestone</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label>Description</label>
-            <textarea
-              value={newEvent.description}
-              onChange={(e) =>
-                setNewEvent({ ...newEvent, description: e.target.value })
-              }
-              placeholder="Event description"
-            />
-          </div>
-
-          <div className="form-actions">
-            <button type="submit">Add Event</button>
-            <button type="button" onClick={() => setIsAddingEvent(false)}>
-              Cancel
-            </button>
-          </div>
-        </form>
-      </div>
-    );
-  };
+    // Cleanup listener when component unmounts
+    return () => unsubscribe();
+  }, [userId, projectId]); // Rerun when userId or projectId changes
 
   // The handleAddEvent function
   const handleAddEvent = async (e) => {
     e.preventDefault();
+
+    if (!userId || !projectId) {
+      console.error("User ID or Project ID missing");
+      return;
+    }
 
     if (newEvent.title) {
       // Use current date if date is missing
@@ -165,10 +94,7 @@ const Timeline = ({ isDarkMode = false }) => {
       try {
         const timelineRef = doc(
           db,
-          "projects",
-          projectId,
-          "timeline",
-          "timeline"
+          `users/${userId}/projects/${projectId}/timeline/config`
         );
 
         // Get the existing document to preserve old events
@@ -185,12 +111,9 @@ const Timeline = ({ isDarkMode = false }) => {
         );
 
         // Update Firestore with the new array (keeps all events)
-        await updateDoc(timelineRef, { events: updatedEvents });
+        await setDoc(timelineRef, { events: updatedEvents }, { merge: true });
 
         console.log("Event added to Firestore successfully");
-
-        // Update local state correctly
-        setTimelineEvents(updatedEvents);
 
         // Reset form
         setNewEvent({
@@ -209,6 +132,126 @@ const Timeline = ({ isDarkMode = false }) => {
       console.error("Error: Event title is required");
       // Optionally set an error state to display in the UI
     }
+  };
+
+  // Handle update event function
+  const handleUpdateEvent = async (e) => {
+    e.preventDefault();
+
+    if (!userId || !projectId || !editingEventId) {
+      console.error("User ID, Project ID, or Event ID missing");
+      return;
+    }
+
+    if (newEvent.title) {
+      // Use current date if date is missing
+      const eventDate = newEvent.date || new Date().toISOString().split("T")[0];
+
+      let timestamp;
+      try {
+        const timeString = newEvent.time || "00:00";
+        const dateTimeString = `${eventDate} ${timeString}`;
+        timestamp = new Date(dateTimeString).getTime();
+      } catch (error) {
+        console.error("Date parsing error:", error);
+        timestamp = Date.now();
+      }
+
+      const updatedEvent = {
+        id: editingEventId,
+        ...newEvent,
+        date: eventDate,
+        timestamp: isNaN(timestamp) ? Date.now() : timestamp,
+      };
+
+      try {
+        const timelineRef = doc(
+          db,
+          `users/${userId}/projects/${projectId}/timeline/config`
+        );
+
+        // Get the existing document
+        const timelineSnap = await getDoc(timelineRef);
+
+        if (timelineSnap.exists()) {
+          const existingEvents = timelineSnap.data().events || [];
+
+          // Replace the event being edited
+          const updatedEvents = existingEvents
+            .map((event) =>
+              event.id === editingEventId ? updatedEvent : event
+            )
+            .sort((a, b) => a.timestamp - b.timestamp);
+
+          // Update Firestore with the modified array
+          await setDoc(timelineRef, { events: updatedEvents }, { merge: true });
+          console.log("Event updated in Firestore successfully");
+        }
+
+        // Reset form and editing state
+        setNewEvent({
+          title: "",
+          date: "",
+          time: "",
+          category: "meeting",
+          description: "",
+        });
+        setIsEditingEvent(false);
+        setEditingEventId(null);
+      } catch (error) {
+        console.error("Error updating event in Firestore:", error);
+      }
+    } else {
+      console.error("Error: Event title is required");
+    }
+  };
+
+  // Handle delete event function
+  const handleDeleteEvent = async (eventId) => {
+    if (!userId || !projectId || !eventId) {
+      console.error("User ID, Project ID, or Event ID missing");
+      return;
+    }
+
+    if (confirm("Are you sure you want to delete this event?")) {
+      try {
+        const timelineRef = doc(
+          db,
+          `users/${userId}/projects/${projectId}/timeline/config`
+        );
+
+        // Get the existing document
+        const timelineSnap = await getDoc(timelineRef);
+
+        if (timelineSnap.exists()) {
+          const existingEvents = timelineSnap.data().events || [];
+
+          // Filter out the event to be deleted
+          const updatedEvents = existingEvents.filter(
+            (event) => event.id !== eventId
+          );
+
+          // Update Firestore with the filtered array
+          await setDoc(timelineRef, { events: updatedEvents }, { merge: true });
+          console.log("Event deleted from Firestore successfully");
+        }
+      } catch (error) {
+        console.error("Error deleting event from Firestore:", error);
+      }
+    }
+  };
+
+  // Function to start editing an event
+  const startEditEvent = (event) => {
+    setNewEvent({
+      title: event.title,
+      date: event.date,
+      time: event.time || "",
+      category: event.category,
+      description: event.description || "",
+    });
+    setEditingEventId(event.id);
+    setIsEditingEvent(true);
   };
 
   const formatDateString = (dateStr) => {
@@ -288,6 +331,34 @@ const Timeline = ({ isDarkMode = false }) => {
           badge: isDarkMode
             ? "bg-gradient-to-r from-green-800/60 to-green-700/60 backdrop-blur-md text-green-200"
             : "bg-gradient-to-r from-green-300/60 to-green-400/60 backdrop-blur-md text-green-900",
+        };
+      case "milestone":
+        return {
+          bg: isDarkMode
+            ? "bg-gradient-to-br from-yellow-900/30 to-amber-700/40 backdrop-blur-md"
+            : "bg-gradient-to-br from-yellow-400/30 to-amber-600/40 backdrop-blur-md",
+          border: isDarkMode
+            ? "border border-yellow-700/30"
+            : "border border-yellow-300/30",
+          text: isDarkMode ? "text-yellow-200" : "text-yellow-800",
+          dot: "bg-gradient-to-r from-yellow-400 to-amber-600",
+          badge: isDarkMode
+            ? "bg-gradient-to-r from-yellow-800/60 to-amber-700/60 backdrop-blur-md text-yellow-200"
+            : "bg-gradient-to-r from-yellow-300/60 to-amber-400/60 backdrop-blur-md text-yellow-900",
+        };
+      case "deadline":
+        return {
+          bg: isDarkMode
+            ? "bg-gradient-to-br from-red-900/30 to-red-700/40 backdrop-blur-md"
+            : "bg-gradient-to-br from-red-400/30 to-red-600/40 backdrop-blur-md",
+          border: isDarkMode
+            ? "border border-red-700/30"
+            : "border border-red-300/30",
+          text: isDarkMode ? "text-red-200" : "text-red-800",
+          dot: "bg-gradient-to-r from-red-400 to-red-600",
+          badge: isDarkMode
+            ? "bg-gradient-to-r from-red-800/60 to-red-700/60 backdrop-blur-md text-red-200"
+            : "bg-gradient-to-r from-red-300/60 to-red-400/60 backdrop-blur-md text-red-900",
         };
       default:
         return {
@@ -425,7 +496,7 @@ const Timeline = ({ isDarkMode = false }) => {
         isDarkMode ? "bg-gray-800/60" : "bg-white/60"
       } backdrop-blur-lg rounded-2xl p-8 shadow-lg ${
         isDarkMode ? "border-gray-700/50" : "border-white/50"
-      } border`}
+      } border min-h-[550px]`}
     >
       <div className="flex justify-between items-center mb-6">
         <h2
@@ -530,6 +601,9 @@ const Timeline = ({ isDarkMode = false }) => {
                   <option value="research">Research</option>
                   <option value="design">Design</option>
                   <option value="development">Development</option>
+                  <option value="milestone">Milestone</option>
+                  <option value="deadline">Deadline</option>
+                  <option value="other">Other</option>
                 </select>
                 <textarea
                   placeholder="Description"
@@ -567,93 +641,280 @@ const Timeline = ({ isDarkMode = false }) => {
         </div>
       )}
 
+      {/* Edit Event Modal */}
+      {isEditingEvent && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div
+            className={`${
+              isDarkMode ? "bg-gray-800" : "bg-white"
+            } rounded-lg p-6 w-full max-w-md mx-4`}
+          >
+            <h3
+              className={`text-xl font-bold mb-4 ${
+                isDarkMode ? "text-white" : "text-gray-800"
+              }`}
+            >
+              Edit Event
+            </h3>
+            <form onSubmit={handleUpdateEvent}>
+              <div className="space-y-4">
+                <input
+                  type="text"
+                  placeholder="Event Title"
+                  value={newEvent.title}
+                  onChange={(e) =>
+                    setNewEvent({
+                      ...newEvent,
+                      title: e.target.value,
+                    })
+                  }
+                  className="w-full px-3 py-2 rounded-lg border bg-transparent focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+
+                {/* Date field with calendar icon */}
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Date (e.g., Jan 15, 2025)"
+                    value={newEvent.date}
+                    onChange={(e) =>
+                      setNewEvent({ ...newEvent, date: e.target.value })
+                    }
+                    className="w-full px-3 py-2 rounded-lg border bg-transparent focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCalendar(!showCalendar)}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2"
+                  >
+                    <CalendarIcon size={16} />
+                  </button>
+
+                  {/* Calendar popup */}
+                  {showCalendar && (
+                    <div className="absolute mt-2 right-0 z-10">
+                      <Calendar
+                        onSelectDate={handleDateSelect}
+                        onClose={() => setShowCalendar(false)}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Time field */}
+                <input
+                  type="time"
+                  placeholder="Time"
+                  value={newEvent.time}
+                  onChange={(e) =>
+                    setNewEvent({ ...newEvent, time: e.target.value })
+                  }
+                  className="w-full px-3 py-2 rounded-lg border bg-transparent focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+
+                <select
+                  value={newEvent.category}
+                  onChange={(e) =>
+                    setNewEvent({
+                      ...newEvent,
+                      category: e.target.value,
+                    })
+                  }
+                  className="w-full px-3 py-2 rounded-lg border bg-transparent focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="meeting">Meeting</option>
+                  <option value="research">Research</option>
+                  <option value="design">Design</option>
+                  <option value="development">Development</option>
+                  <option value="milestone">Milestone</option>
+                  <option value="deadline">Deadline</option>
+                  <option value="other">Other</option>
+                </select>
+                <textarea
+                  placeholder="Description"
+                  value={newEvent.description}
+                  onChange={(e) =>
+                    setNewEvent({
+                      ...newEvent,
+                      description: e.target.value,
+                    })
+                  }
+                  className="w-full px-3 py-2 rounded-lg border bg-transparent focus:outline-none focus:ring-2 focus:ring-indigo-500 h-24"
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditingEvent(false);
+                      setEditingEventId(null);
+                      setNewEvent({
+                        title: "",
+                        date: "",
+                        time: "",
+                        category: "meeting",
+                        description: "",
+                      });
+                    }}
+                    className={`px-4 py-2 rounded-lg border hover:bg-opacity-10 ${
+                      isDarkMode
+                        ? "text-gray-300 hover:bg-gray-700"
+                        : "text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-indigo-700 text-white rounded-lg hover:from-indigo-600 hover:to-indigo-800"
+                  >
+                    Update Event
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Centered Timeline */}
-      <div className="relative">
-        {/* Center Line */}
-        <div className="absolute left-1/2 transform -translate-x-1/2 w-1 h-full bg-gradient-to-b from-indigo-300 to-purple-400" />
+      <div className="relative min-h-[400px]">
+        {/* Center Line - Only visible when there are events */}
+        {timelineEvents.length > 0 && (
+          <div className="absolute left-1/2 transform -translate-x-1/2 w-1 h-full bg-gradient-to-b from-indigo-300 to-purple-400" />
+        )}
 
         {/* Timeline Events */}
         <div className="space-y-12">
-          {timelineEvents.map((event, index) => {
-            const styles = getCategoryStyle(event.category);
-            return (
-              <div
-                key={event.id}
-                className={`flex ${
-                  index % 2 === 0 ? "justify-start" : "justify-end"
-                }`}
-              >
+          {timelineEvents.length > 0 ? (
+            timelineEvents.map((event, index) => {
+              const styles = getCategoryStyle(event.category);
+              return (
                 <div
-                  className={`w-5/12 relative ${
-                    index % 2 === 0 ? "pr-8" : "pl-8"
-                  }`}
+                  key={event.id}
+                  className={`flex ${
+                    index % 2 === 0 ? "flex-row" : "flex-row-reverse"
+                  } justify-center items-center`}
                 >
+                  {/* Event Content */}
                   <div
-                    className={`${styles.bg} ${styles.border} p-5 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300`}
-                  >
-                    <div className="mb-2">
-                      <h3
-                        className={`text-lg font-semibold ${
-                          isDarkMode ? "text-white" : "text-gray-800"
-                        }`}
-                      >
-                        {event.title}
-                      </h3>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${styles.badge}`}
-                        >
-                          {event.category.charAt(0).toUpperCase() +
-                            event.category.slice(1)}
-                        </span>
-                        <span
-                          className={`text-sm ${
-                            isDarkMode
-                              ? "text-gray-300 bg-gray-800/40"
-                              : "text-gray-600 bg-white/40"
-                          } px-2 py-1 rounded-full backdrop-blur-sm`}
-                        >
-                          <Clock size={14} className="inline mr-1" />
-                          {event.date} {event.time ? `at ${event.time}` : ""}
-                        </span>
-                      </div>
-                    </div>
-                    <p
-                      className={`${
-                        isDarkMode
-                          ? "text-gray-300 bg-gray-800/30"
-                          : "text-gray-700 bg-white/30"
-                      } text-sm backdrop-blur-sm p-2 rounded-lg`}
-                    >
-                      {event.description}
-                    </p>
-                  </div>
-
-                  {/* Connector Line */}
-                  <div
-                    className={`absolute top-1/2 ${
-                      index % 2 === 0 ? "right-0" : "left-0"
-                    } w-8 h-1 bg-gradient-to-r from-indigo-200 to-indigo-300`}
-                  />
-
-                  {/* Circle on Timeline */}
-                  <div
-                    className={`absolute top-1/2 transform -translate-y-1/2 ${
-                      index % 2 === 0 ? "right-0" : "left-0"
-                    } translate-x-1/2 w-4 h-4 rounded-full ${
-                      styles.dot
-                    } shadow-lg border-2 border-white`}
+                    className={`w-5/12 ${
+                      index % 2 === 0 ? "pr-8 text-right" : "pl-8"
+                    }`}
                   >
                     <div
-                      className={`absolute inset-0 rounded-full ${
-                        isDarkMode ? "bg-opacity-80" : ""
-                      }`}
+                      className={`p-4 rounded-lg shadow-lg ${styles.bg} ${styles.border}`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className={`font-bold text-lg ${styles.text}`}>
+                            {event.title}
+                          </h3>
+                          <div className="flex items-center mt-2 space-x-2">
+                            {event.date && (
+                              <span
+                                className={`text-sm flex items-center ${
+                                  isDarkMode ? "text-gray-300" : "text-gray-600"
+                                }`}
+                              >
+                                <CalendarIcon size={14} className="mr-1" />
+                                {formatDateString(event.date)}
+                              </span>
+                            )}
+                            {event.time && (
+                              <span
+                                className={`text-sm flex items-center ${
+                                  isDarkMode ? "text-gray-300" : "text-gray-600"
+                                }`}
+                              >
+                                <Clock size={14} className="mr-1" />
+                                {event.time}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Event actions */}
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => startEditEvent(event)}
+                            className={`p-1.5 rounded-full ${
+                              isDarkMode
+                                ? "hover:bg-gray-700/50"
+                                : "hover:bg-gray-100/50"
+                            }`}
+                          >
+                            <Edit2 size={16} className={styles.text} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteEvent(event.id)}
+                            className={`p-1.5 rounded-full ${
+                              isDarkMode
+                                ? "hover:bg-gray-700/50"
+                                : "hover:bg-gray-100/50"
+                            }`}
+                          >
+                            <Trash2 size={16} className={styles.text} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <span
+                        className={`inline-block px-2 py-0.5 text-xs rounded-full mt-2 ${styles.badge}`}
+                      >
+                        {event.category.charAt(0).toUpperCase() +
+                          event.category.slice(1)}
+                      </span>
+
+                      {event.description && (
+                        <p
+                          className={`mt-2 text-sm ${
+                            isDarkMode ? "text-gray-300" : "text-gray-600"
+                          }`}
+                        >
+                          {event.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Center Dot */}
+                  <div className="relative">
+                    <div
+                      className={`w-4 h-4 rounded-full ${styles.dot} absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 shadow-md`}
                     />
                   </div>
+
+                  {/* Empty space for the opposite side */}
+                  <div className="w-5/12" />
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          ) : (
+            <div
+              className={`flex flex-col items-center justify-center text-center py-16 ${
+                isDarkMode ? "text-gray-400" : "text-gray-500"
+              }`}
+            >
+              <CalendarIcon
+                size={48}
+                className={`mb-4 ${
+                  isDarkMode ? "text-gray-600" : "text-gray-400"
+                }`}
+              />
+              <h3 className="text-lg font-medium mb-2">No events yet</h3>
+              <p className="max-w-sm">
+                Add important events, milestones, and deadlines to create your
+                project timeline.
+              </p>
+              <button
+                onClick={() => setIsAddingEvent(true)}
+                className="mt-4 px-4 py-2 bg-gradient-to-r from-indigo-500 to-indigo-700 text-white rounded-lg hover:from-indigo-600 hover:to-indigo-800 flex items-center"
+              >
+                <Plus size={16} className="mr-2" />
+                Add First Event
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

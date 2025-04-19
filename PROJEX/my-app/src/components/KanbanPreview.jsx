@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { doc, setDoc, updateDoc, onSnapshot, getDoc } from "firebase/firestore";
-import { db } from "../firebase/firebaseConfig"; // Adjust the import path as needed
+import { db, auth } from "../firebase/firebaseConfig";
+import { onAuthStateChanged } from "firebase/auth";
 import TimelineBoard from "./TimelineBoard";
 import CalendarComponent from "./CalendarComponent";
 import TeamBoard from "./TeamBoard";
-
-const projectId = "project1";
 
 import {
   MoreHorizontal,
@@ -23,7 +23,112 @@ import {
   Moon,
 } from "lucide-react";
 
+// Utility to ensure project structure
+const ensureProjectStructure = async (userId, projectId) => {
+  try {
+    // Check if project exists
+    const projectRef = doc(db, `users/${userId}/projects/${projectId}`);
+    const projectDoc = await getDoc(projectRef);
+
+    if (!projectDoc.exists()) {
+      console.error("Project does not exist!");
+      return false;
+    }
+
+    // Check and create title collection if needed
+    const titleRef = doc(
+      db,
+      `users/${userId}/projects/${projectId}/title/info`
+    );
+    const titleDoc = await getDoc(titleRef);
+
+    if (!titleDoc.exists()) {
+      await setDoc(titleRef, {
+        title: projectDoc.data().name || "Untitled Project",
+      });
+      console.log("Created missing title collection");
+    }
+
+    // Check and create tasks collection if needed
+    const tasksRef = doc(
+      db,
+      `users/${userId}/projects/${projectId}/tasks/config`
+    );
+    const tasksDoc = await getDoc(tasksRef);
+
+    if (!tasksDoc.exists()) {
+      await setDoc(tasksRef, {
+        columns: [
+          {
+            id: "todo",
+            title: "To Do",
+            color: "bg-gradient-to-br from-pink-500 to-purple-600", // Changed to pink gradient
+            tasks: [],
+          },
+          {
+            id: "inProgress",
+            title: "In Progress",
+            color: "bg-gradient-to-br from-blue-500 to-cyan-600", // Changed to blue gradient
+            tasks: [],
+          },
+          {
+            id: "done",
+            title: "Done",
+            color: "bg-gradient-to-br from-green-500 to-emerald-600", // Keep green gradient
+            tasks: [],
+          },
+        ],
+      });
+      console.log("Created missing tasks collection");
+    }
+
+    // Check and create timeline collection
+    const timelineRef = doc(
+      db,
+      `users/${userId}/projects/${projectId}/timeline/config`
+    );
+    const timelineDoc = await getDoc(timelineRef);
+
+    if (!timelineDoc.exists()) {
+      await setDoc(timelineRef, { events: [] });
+      console.log("Created missing timeline collection");
+    }
+
+    // Check and create calendar collection
+    const calendarRef = doc(
+      db,
+      `users/${userId}/projects/${projectId}/calendar/config`
+    );
+    const calendarDoc = await getDoc(calendarRef);
+
+    if (!calendarDoc.exists()) {
+      await setDoc(calendarRef, { events: [] });
+      console.log("Created missing calendar collection");
+    }
+
+    // Check and create team collection
+    const teamRef = doc(
+      db,
+      `users/${userId}/projects/${projectId}/team/members`
+    );
+    const teamDoc = await getDoc(teamRef);
+
+    if (!teamDoc.exists()) {
+      await setDoc(teamRef, { members: [] });
+      console.log("Created missing team collection");
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Error ensuring project structure:", error);
+    return false;
+  }
+};
+
 const KanbanBoard = () => {
+  const { projectId } = useParams();
+  const navigate = useNavigate();
+  const [userId, setUserId] = useState(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [boardTitle, setBoardTitle] = useState("Loading...");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -37,6 +142,8 @@ const KanbanBoard = () => {
   const [draggedTask, setDraggedTask] = useState(null);
   const [taskMenuOpen, setTaskMenuOpen] = useState(null);
   const [lastEditedField, setLastEditedField] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const [isAddingNewTask, setIsAddingNewTask] = useState(false);
   const taskNameInputRef = useRef(null);
@@ -49,6 +156,46 @@ const KanbanBoard = () => {
 
   const [columns, setColumns] = useState([]);
 
+  // Get current user
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        // Handle not logged in state - redirect to login
+        console.log("No user is signed in");
+        navigate("/login");
+      }
+    });
+
+    return () => unsubscribe();
+  }, [navigate]);
+
+  // Initialize project
+  useEffect(() => {
+    const initializeProject = async () => {
+      if (!userId || !projectId) return;
+
+      setIsLoading(true);
+      try {
+        const structureOk = await ensureProjectStructure(userId, projectId);
+        if (structureOk) {
+          await fetchBoardTitle();
+          await loadColumnsFromFirestore();
+        } else {
+          setError("Could not find or initialize the project");
+        }
+      } catch (err) {
+        console.error("Error initializing project:", err);
+        setError(`Error: ${err.message}`);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initializeProject();
+  }, [userId, projectId]);
+
   const handleDragStart = (task, columnId) => {
     setDraggedTask({ task, sourceColumnId: columnId });
   };
@@ -59,8 +206,13 @@ const KanbanBoard = () => {
 
   // When saving columns
   const saveColumnsToFirestore = async (columns) => {
+    if (!userId || !projectId) return;
+
     try {
-      const projectRef = doc(db, "projects", projectId, "Tasks", "Tasks");
+      const projectRef = doc(
+        db,
+        `users/${userId}/projects/${projectId}/tasks/config`
+      );
       await setDoc(projectRef, { columns }, { merge: true });
       console.log("Columns successfully updated in Firestore!");
     } catch (error) {
@@ -70,29 +222,51 @@ const KanbanBoard = () => {
 
   // When loading columns
   const loadColumnsFromFirestore = async () => {
+    if (!userId || !projectId) return;
+
     try {
-      const projectRef = doc(db, "projects", projectId, "Tasks", "Tasks");
+      const projectRef = doc(
+        db,
+        `users/${userId}/projects/${projectId}/tasks/config`
+      );
       const projectSnap = await getDoc(projectRef);
 
       if (projectSnap.exists()) {
         const data = projectSnap.data();
         if (data.columns) {
           setColumns(data.columns);
+        } else {
+          // Initialize with default columns if none exist
+          // This is inside the loadColumnsFromFirestore function and the default columns initialization
+
+          const defaultColumns = [
+            {
+              id: "todo",
+              title: "To Do",
+              color: "bg-gradient-to-br from-pink-500 to-purple-600", // Changed to pink gradient
+              tasks: [],
+            },
+            {
+              id: "inProgress",
+              title: "In Progress",
+              color: "bg-gradient-to-br from-blue-500 to-cyan-600", // Changed to blue gradient
+              tasks: [],
+            },
+            {
+              id: "done",
+              title: "Done",
+              color: "bg-gradient-to-br from-green-500 to-emerald-600", // Keep green gradient
+              tasks: [],
+            },
+          ];
+          setColumns(defaultColumns);
+          await saveColumnsToFirestore(defaultColumns);
         }
       }
     } catch (error) {
       console.error("Error loading columns from Firestore:", error);
     }
   };
-
-  // Add this useEffect to load columns on component mount
-  useEffect(() => {
-    loadColumnsFromFirestore();
-  }, []);
-
-  useEffect(() => {
-    loadColumnsFromFirestore();
-  }, []);
 
   const updateColumns = (newColumns) => {
     setColumns(newColumns);
@@ -245,39 +419,47 @@ const KanbanBoard = () => {
     setIsAddingNewTask(true);
   };
 
-  useEffect(() => {
-    const fetchBoardTitle = async () => {
-      try {
-        const titleRef = doc(db, "projects", projectId, "TITLE", "title");
-        const titleSnap = await getDoc(titleRef);
+  const fetchBoardTitle = async () => {
+    if (!userId || !projectId) return;
 
-        if (titleSnap.exists()) {
-          const data = titleSnap.data();
-          if (data.title) {
-            setBoardTitle(data.title);
-          }
-        } else {
-          // If no title exists, set a default title and save it to Firestore
-          const defaultTitle = "My Project";
-          await setDoc(titleRef, { title: defaultTitle });
-          setBoardTitle(defaultTitle);
+    try {
+      const titleRef = doc(
+        db,
+        `users/${userId}/projects/${projectId}/title/info`
+      );
+      const titleSnap = await getDoc(titleRef);
+
+      if (titleSnap.exists()) {
+        const data = titleSnap.data();
+        if (data.title) {
+          setBoardTitle(data.title);
+          setEditedTitle(data.title);
         }
-      } catch (error) {
-        console.error("Error loading board title:", error);
+      } else {
+        // If no title exists, set a default title and save it to Firestore
+        const defaultTitle = "My Project";
+        await setDoc(titleRef, { title: defaultTitle });
+        setBoardTitle(defaultTitle);
+        setEditedTitle(defaultTitle);
       }
-    };
-
-    fetchBoardTitle();
-  }, [projectId]);
+    } catch (error) {
+      console.error("Error loading board title:", error);
+    }
+  };
 
   const handleTitleSave = async () => {
-    if (editedTitle.trim() && projectId) {
+    if (!userId || !projectId) return;
+
+    if (editedTitle.trim()) {
       try {
         // Update local state
         setBoardTitle(editedTitle);
 
         // Update Firebase
-        const titleRef = doc(db, "projects", projectId, "TITLE", "title");
+        const titleRef = doc(
+          db,
+          `users/${userId}/projects/${projectId}/title/info`
+        );
         await updateDoc(titleRef, {
           title: editedTitle,
         });
@@ -290,10 +472,14 @@ const KanbanBoard = () => {
     setIsEditingTitle(false);
   };
 
+  // Setup real-time listener for columns
   useEffect(() => {
-    if (!projectId) return;
+    if (!userId || !projectId) return;
 
-    const projectRef = doc(db, "projects", projectId, "Tasks", "Tasks");
+    const projectRef = doc(
+      db,
+      `users/${userId}/projects/${projectId}/tasks/config`
+    );
 
     // Listen for real-time updates to the columns
     const unsubscribe = onSnapshot(projectRef, (docSnap) => {
@@ -306,7 +492,7 @@ const KanbanBoard = () => {
     });
 
     return () => unsubscribe(); // Cleanup listener when component unmounts
-  }, [projectId]);
+  }, [projectId, userId]);
 
   useEffect(() => {
     setEditedTitle(boardTitle);
@@ -465,6 +651,37 @@ const KanbanBoard = () => {
     </div>
   );
 
+  // Show loading state while initializing
+  if (isLoading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-gray-100">
+        <div className="text-center">
+          <div className="mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-t-2 border-indigo-600 mx-auto"></div>
+          <p className="text-lg text-gray-700">Loading project...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state if there's an error
+  if (error) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-gray-100">
+        <div className="max-w-md p-6 bg-white rounded-lg shadow-lg text-center">
+          <div className="text-red-600 text-5xl mb-4">⚠️</div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Error</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={() => navigate("/projects")}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+          >
+            Return to Projects
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`flex h-screen w-screen overflow-hidden ${
@@ -593,7 +810,7 @@ const KanbanBoard = () => {
             </div>
 
             {activeTab === "tasks" && (
-              <div className="grid grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {columns.map((column) => (
                   <div
                     key={column.id}
@@ -675,32 +892,34 @@ const KanbanBoard = () => {
                                     </button>{" "}
                                     {taskMenuOpen === task.id && (
                                       <div
-                                        className={`absolute right-0 mt-1 w-36 rounded-md shadow-lg z-10 py-1 ${
+                                        className={`absolute right-0 top-full mt-1 w-40 py-1 ${
                                           isDarkMode
-                                            ? "bg-gray-800"
+                                            ? "bg-gray-700"
                                             : "bg-white"
-                                        }`}
+                                        } border rounded-md shadow-lg z-10`}
                                       >
                                         <button
                                           onClick={() =>
                                             editTask(task, column.id)
                                           }
-                                          className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center ${
+                                          className={`w-full text-left px-4 py-2 text-sm ${
                                             isDarkMode
-                                              ? "text-gray-300 hover:bg-gray-700"
+                                              ? "text-gray-200 hover:bg-gray-600"
                                               : "text-gray-700 hover:bg-gray-100"
                                           }`}
                                         >
-                                          <Edit2 size={14} className="mr-2" />
                                           Edit
                                         </button>
                                         <button
                                           onClick={() =>
                                             deleteTask(task.id, column.id)
                                           }
-                                          className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 flex items-center"
+                                          className={`w-full text-left px-4 py-2 text-sm ${
+                                            isDarkMode
+                                              ? "text-red-400 hover:bg-gray-600"
+                                              : "text-red-500 hover:bg-gray-100"
+                                          }`}
                                         >
-                                          <Trash2 size={14} className="mr-2" />
                                           Delete
                                         </button>
                                       </div>
@@ -709,22 +928,26 @@ const KanbanBoard = () => {
                                 </div>
                                 <div className="flex items-center justify-between">
                                   <span
-                                    className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    className={`px-2 py-1 rounded-md text-xs ${
                                       task.priority === "high"
-                                        ? "bg-red-100 text-red-700"
+                                        ? "bg-red-100 text-red-800"
                                         : task.priority === "medium"
-                                        ? "bg-amber-100 text-amber-700"
-                                        : "bg-green-100 text-green-700"
+                                        ? "bg-yellow-100 text-yellow-800"
+                                        : "bg-green-100 text-green-800"
                                     }`}
                                   >
                                     {task.priority.charAt(0).toUpperCase() +
                                       task.priority.slice(1)}
                                   </span>
                                   {task.assignee && (
-                                    <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center">
-                                      <span className="text-xs text-white font-medium">
-                                        {task.assignee}
-                                      </span>
+                                    <div
+                                      className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                                        isDarkMode
+                                          ? "bg-indigo-500 text-white"
+                                          : "bg-indigo-100 text-indigo-800"
+                                      }`}
+                                    >
+                                      {task.assignee}
                                     </div>
                                   )}
                                 </div>
@@ -739,12 +962,53 @@ const KanbanBoard = () => {
               </div>
             )}
 
-            {activeTab === "timeline" && <TimelineBoard columns={columns} />}
+            {activeTab === "timeline" && (
+              <div
+                className={`p-6 rounded-xl ${
+                  isDarkMode
+                    ? "bg-gray-800/30 backdrop-blur-md"
+                    : "bg-white/30 backdrop-blur-md"
+                } shadow-lg`}
+              >
+                <TimelineBoard
+                  projectId={projectId}
+                  userId={userId}
+                  isDarkMode={isDarkMode}
+                />
+              </div>
+            )}
 
             {activeTab === "calendar" && (
-              <CalendarComponent columns={columns} />
+              <div
+                className={`p-6 rounded-xl ${
+                  isDarkMode
+                    ? "bg-gray-800/30 backdrop-blur-md"
+                    : "bg-white/30 backdrop-blur-md"
+                } shadow-lg`}
+              >
+                <CalendarComponent
+                  projectId={projectId}
+                  userId={userId}
+                  isDarkMode={isDarkMode}
+                />
+              </div>
             )}
-            {activeTab === "teams" && <TeamBoard columns={columns} />}
+
+            {activeTab === "teams" && (
+              <div
+                className={`p-6 rounded-xl ${
+                  isDarkMode
+                    ? "bg-gray-800/30 backdrop-blur-md"
+                    : "bg-white/30 backdrop-blur-md"
+                } shadow-lg`}
+              >
+                <TeamBoard
+                  projectId={projectId}
+                  userId={userId}
+                  isDarkMode={isDarkMode}
+                />
+              </div>
+            )}
           </div>
         </div>
       </main>

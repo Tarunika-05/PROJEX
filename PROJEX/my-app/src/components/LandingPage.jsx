@@ -1,5 +1,7 @@
-import { Link } from 'react-router-dom';
+import { Link } from "react-router-dom";
 import React, { useState, useEffect } from "react";
+import { Link as ScrollLink } from "react-scroll";
+
 import {
   ArrowRight,
   ChevronRight,
@@ -18,17 +20,19 @@ import {
   Zap,
   Star,
   DollarSign,
-  CheckSquare,Cloud,
+  CheckSquare,
+  Cloud,
 } from "lucide-react";
 import { Camera } from "lucide-react";
-
 
 const SaasLanding = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrollY, setScrollY] = useState(0);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [graphData, setGraphData] = useState(
-    Array(12).fill(0).map(() => Math.random() * 100)
+    Array(12)
+      .fill(0)
+      .map(() => Math.random() * 100)
   );
 
   useEffect(() => {
@@ -57,7 +61,6 @@ const SaasLanding = () => {
     };
   }, []);
 
-  
   const FloatingCard = ({ style, children }) => (
     <div
       className="absolute bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-4 hidden md:block"
@@ -72,7 +75,7 @@ const SaasLanding = () => {
     </div>
   );
 
- const GraphCard = () => (
+  const GraphCard = () => (
     <div className="bg-white/90 backdrop-blur-sm rounded-xl p-4 shadow-lg">
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-gray-800">Project Progress</h3>
@@ -113,28 +116,61 @@ const SaasLanding = () => {
     </div>
   );
 
-  const NavItem = ({ label }) => (
-    <button className="relative px-4 py-2 group">
+  const NavItem = ({ label, sectionId }) => (
+    <a
+      href={`#${sectionId}`}
+      className="relative px-4 py-2 group cursor-pointer"
+      onClick={(e) => {
+        e.preventDefault();
+        const element = document.getElementById(sectionId);
+        if (element) {
+          window.scrollTo({
+            top: element.offsetTop - 100,
+            behavior: "smooth",
+          });
+          setMobileMenuOpen(false);
+        }
+      }}
+    >
       <span className="relative z-10 text-gray-700 group-hover:text-indigo-600 transition-colors">
         {label}
       </span>
       <div className="absolute inset-0 h-1 w-0 bg-indigo-100 group-hover:w-full transition-all duration-300 bottom-0 rounded-full" />
-    </button>
+    </a>
   );
+
+  <div className="hidden md:flex items-center space-x-2">
+    <NavItem label="Features" sectionId="features" />
+    <NavItem label="Pricing" sectionId="pricing" />
+    <NavItem label="About" sectionId="dashboard" />
+    <NavItem label="Contact" sectionId="faq" />
+
+    <Link to="/signup" className="w-full">
+      <button className="w-full py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:opacity-90 transition-all">
+        Get Started
+      </button>
+    </Link>
+  </div>;
 
   const DashboardPreview = () => (
     <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl p-6 transform hover:scale-105 transition-all duration-300">
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="bg-indigo-50 p-4 rounded-xl">
-          <h4 className="text-sm font-semibold text-indigo-600 mb-2">Active Projects</h4>
+          <h4 className="text-sm font-semibold text-indigo-600 mb-2">
+            Active Projects
+          </h4>
           <p className="text-2xl font-bold text-gray-800">24</p>
         </div>
         <div className="bg-purple-50 p-4 rounded-xl">
-          <h4 className="text-sm font-semibold text-purple-600 mb-2">Team Members</h4>
+          <h4 className="text-sm font-semibold text-purple-600 mb-2">
+            Team Members
+          </h4>
           <p className="text-2xl font-bold text-gray-800">12</p>
         </div>
         <div className="bg-pink-50 p-4 rounded-xl">
-          <h4 className="text-sm font-semibold text-pink-600 mb-2">Tasks Complete</h4>
+          <h4 className="text-sm font-semibold text-pink-600 mb-2">
+            Tasks Complete
+          </h4>
           <p className="text-2xl font-bold text-gray-800">89%</p>
         </div>
       </div>
@@ -179,183 +215,187 @@ const SaasLanding = () => {
       </ul>
 
       <Link to="/signup" className="w-full">
-
-  <button className="w-full py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:opacity-90 transition-all" onClick={() => navigate("/signup")}>
-    Get Started
-  </button>
-  </Link>
-
+        <button
+          className="w-full py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:opacity-90 transition-all"
+          onClick={() => navigate("/signup")}
+        >
+          Get Started
+        </button>
+      </Link>
     </div>
   );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
-     {/* Navigation */}
-           <nav
-             className={`fixed w-full z-50 transition-all duration-300 ${
-               scrollY > 50 ? "py-4 bg-white/80 backdrop-blur-lg shadow-sm" : "py-6"
-             }`}
-           >
-             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-               <div className="flex items-center justify-between">
-                 <div className="flex items-center">
-                   <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600">
-                     PROJEX
-                   </span>
-                 </div>
+      {/* Navigation */}
+      <nav
+        className={`fixed w-full z-50 transition-all duration-300 ${
+          scrollY > 50 ? "py-4 bg-white/80 backdrop-blur-lg shadow-sm" : "py-6"
+        }`}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <ScrollLink to="hero" smooth={true} duration={500}>
+                <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600 cursor-pointer">
+                  PROJEX
+                </span>
+              </ScrollLink>
+            </div>
 
-                 <div className="hidden md:flex items-center space-x-2">
-                   <NavItem label="Features" />
-                   <NavItem label="Pricing" />
-                   <NavItem label="About" />
-                   <NavItem label="Contact" />
-                   
-                   <Link to="/signup" className="w-full">
-  <button className="w-full py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:opacity-90 transition-all">
-    Get Started
-  </button>
-</Link>
+            <div className="hidden md:flex items-center space-x-2">
+              <NavItem label="Features" sectionId="features" />
+              <NavItem label="Dashboard" sectionId="solutions" />
+              <NavItem label="Testimonials" sectionId="users" />
+              <NavItem label="Pricing" sectionId="pricing" />
+              <NavItem label="FAQ" sectionId="faq" />
+              <NavItem label="Contact" sectionId="contact" />
 
-                 </div>
-     
-                 <button
-                   className="md:hidden p-2"
-                   onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                 >
-                   {mobileMenuOpen ? (
-                     <Camera size={24} />
-                   ) : (
-                     <Camera size={24} />
-                   )}
-                 </button>
-               </div>
-             </div>
-           </nav>
-     
-           {/* Hero Section */}
-           <div className="relative pt-32 pb-20 overflow-hidden">
-             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-               <div className="text-center max-w-4xl mx-auto relative">
-                 {/* Animated Blobs */}
-                 <div
-                   className="absolute top-0 -left-32 w-64 h-64 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob"
-                   style={{
-                     transform: `translate(${mousePosition.x * -1.2}px, ${
-                       mousePosition.y * -1.2
-                     }px)`,
-                   }}
-                 />
-                 <div
-                   className="absolute -top-32 -right-32 w-64 h-64 bg-indigo-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-2000"
-                   style={{
-                     transform: `translate(${mousePosition.x * 1.2}px, ${
-                       mousePosition.y * -1.2
-                     }px)`,
-                   }}
-                 />
-                 <div
-                   className="absolute -bottom-32 left-32 w-64 h-64 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-4000"
-                   style={{
-                     transform: `translate(${mousePosition.x * -1.2}px, ${
-                       mousePosition.y * 1.2
-                     }px)`,
-                   }}
-                 />
-     
-                 {/* Floating Cards */}
-                 <FloatingCard 
-                   style={{ 
-                     top: "10%", 
-                     left: "-20%", 
-                     multiplier: -1.5,
-                     width: "280px"
-                   }}
-                 >
-                   <TaskCard />
-                 </FloatingCard>
-     
-                 <FloatingCard
-                   style={{
-                     top: "30%",
-                     right: "-20%",
-                     multiplier: 1.5,
-                     width: "300px"
-                   }}
-                 >
-                   <GraphCard />
-                 </FloatingCard>
-     
-                 <FloatingCard
-                   style={{ 
-                     bottom: "20%", 
-                     left: "-15%", 
-                     multiplier: -1,
-                     width: "200px"
-                   }}
-                 >
-                   <div className="flex items-center space-x-2">
-                     <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center">
-                       <Camera size={16} className="text-white" />
-                     </div>
-                     <span className="text-sm font-medium text-gray-800">
-                       15 team members online
-                     </span>
-                   </div>
-                 </FloatingCard>
-     
-                 <FloatingCard
-                   style={{ 
-                     bottom: "30%", 
-                     right: "-15%", 
-                     multiplier: 1,
-                     width: "200px"
-                   }}
-                 >
-                   <div className="flex items-center space-x-2">
-                     <Camera size={20} className="text-indigo-600" />
-                     <span className="text-sm font-medium text-gray-800">
-                       Real-time collaboration
-                     </span>
-                   </div>
-                 </FloatingCard>
-     
-                 {/* Hero Content */}
-                 <h1 className="text-6xl md:text-7xl font-bold mb-6 leading-tight relative">
-                   Project Management
-                   <span className="block bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600">
-                     Reimagined
-                   </span>
-                 </h1>
-                 <p className="text-xl text-gray-600 mb-12 max-w-2xl mx-auto">
-                   Harness the power of AI to streamline your workflow. Built for
-                   modern teams who demand excellence.
-                 </p>
-     
-                 <div className="flex flex-col sm:flex-row justify-center gap-4 relative z-10">
-                 <Link to="/signup" className="w-full">
-                   <button className="px-8 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-medium hover:opacity-90 transition-all flex items-center justify-center group">
-                     Start Free Trial
-                     <Camera className="ml-2 group-hover:translate-x-1 transition-transform" size={20} />
-                   </button>
-                   </Link>
-                   <Link to="/signup" className="w-full">
-                   <button className="px-8 py-4 bg-white/50 backdrop-blur-sm rounded-xl font-medium text-gray-700 hover:bg-white/70 transition-all flex items-center justify-center">
-                     Watch Demo
-                   </button>
-                   </Link>
-                 </div>
-               </div>
-             </div>
-             <div className="absolute inset-0 bg-grid-slate-200/20 [mask-image:linear-gradient(0deg,transparent,black)] -z-10" />
-           </div>
+              <Link to="/signup" className="ml-4">
+                <button className="py-2 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:opacity-90 transition-all">
+                  Get Started
+                </button>
+              </Link>
+            </div>
+
+            <button
+              className="md:hidden p-2"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              {mobileMenuOpen ? <Camera size={24} /> : <Camera size={24} />}
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      {/* Hero Section */}
+      <div className="relative pt-32 pb-20 overflow-hidden" id="hero">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="text-center max-w-4xl mx-auto relative">
+            {/* Animated Blobs */}
+            <div
+              className="absolute top-0 -left-32 w-64 h-64 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob"
+              style={{
+                transform: `translate(${mousePosition.x * -1.2}px, ${
+                  mousePosition.y * -1.2
+                }px)`,
+              }}
+            />
+            <div
+              className="absolute -top-32 -right-32 w-64 h-64 bg-indigo-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-2000"
+              style={{
+                transform: `translate(${mousePosition.x * 1.2}px, ${
+                  mousePosition.y * -1.2
+                }px)`,
+              }}
+            />
+            <div
+              className="absolute -bottom-32 left-32 w-64 h-64 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-4000"
+              style={{
+                transform: `translate(${mousePosition.x * -1.2}px, ${
+                  mousePosition.y * 1.2
+                }px)`,
+              }}
+            />
+
+            {/* Floating Cards */}
+            <FloatingCard
+              style={{
+                top: "10%",
+                left: "-20%",
+                multiplier: -1.5,
+                width: "280px",
+              }}
+            >
+              <TaskCard />
+            </FloatingCard>
+
+            <FloatingCard
+              style={{
+                top: "30%",
+                right: "-20%",
+                multiplier: 1.5,
+                width: "300px",
+              }}
+            >
+              <GraphCard />
+            </FloatingCard>
+
+            <FloatingCard
+              style={{
+                bottom: "20%",
+                left: "-15%",
+                multiplier: -1,
+                width: "200px",
+              }}
+            >
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center">
+                  <Camera size={16} className="text-white" />
+                </div>
+                <span className="text-sm font-medium text-gray-800">
+                  15 team members online
+                </span>
+              </div>
+            </FloatingCard>
+
+            <FloatingCard
+              style={{
+                bottom: "30%",
+                right: "-15%",
+                multiplier: 1,
+                width: "200px",
+              }}
+            >
+              <div className="flex items-center space-x-2">
+                <Camera size={20} className="text-indigo-600" />
+                <span className="text-sm font-medium text-gray-800">
+                  Real-time collaboration
+                </span>
+              </div>
+            </FloatingCard>
+
+            {/* Hero Content */}
+            <h1 className="px-10 text-6xl md:text-7xl font-bold mb-6 leading-tight relative ml-10">
+              Project Management
+              <span className="py-5 block bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600">
+                Reimagined
+              </span>
+            </h1>
+            <p className="text-xl text-gray-600 mb-12 max-w-2xl mx-auto">
+              Harness the power of AI to streamline your workflow. Built for
+              modern teams who demand excellence.
+            </p>
+
+            <div className="ml-12 px-10 py-2 flex flex-col sm:flex-row justify-center gap-2 relative z-10 p-15">
+              <Link to="/signup" className="w-full ">
+                <button className="ml-12 px-5 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-medium hover:opacity-90 transition-all flex items-center justify-center group">
+                  Start Free Trial
+                  <Camera
+                    className="ml-2 group-hover:translate-x-1 transition-transform"
+                    size={20}
+                  />
+                </button>
+              </Link>
+              <Link to="/signup" className="w-full">
+                <button className="ml-12 px-10 py-4 bg-white/50 backdrop-blur-sm rounded-xl font-medium text-gray-700 hover:bg-white/70 transition-all flex items-center justify-center ">
+                  Watch Demo
+                </button>
+              </Link>
+            </div>
+          </div>
+        </div>
+        <div className="absolute inset-0 bg-grid-slate-200/20 [mask-image:linear-gradient(0deg,transparent,black)] -z-10" />
+      </div>
 
       {/* Features Section */}
-      <div className="py-20 bg-white/30">
+      <div className="py-20 bg-white/30" id="features">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold mb-4">Powerful Features</h2>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Everything you need to manage projects efficiently and boost team productivity
+              Everything you need to manage projects efficiently and boost team
+              productivity
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -363,17 +403,20 @@ const SaasLanding = () => {
               {
                 icon: Zap,
                 title: "Powerful Task Management",
-                description: "Organize projects with a Kanban board, timeline, and automated progress tracking.",
+                description:
+                  "Organize projects with a Kanban board, timeline, and automated progress tracking.",
               },
               {
                 icon: Globe,
                 title: "Seamless Team Collaboration ",
-                description: "Real-time chat, AI-powered assistant, and smart notifications keep teams in sync.",
+                description:
+                  "Real-time chat, AI-powered assistant, and smart notifications keep teams in sync.",
               },
               {
                 icon: Cloud,
                 title: "Scalable & Intelligent",
-                description: "Cloud-based, real-time updates with Firebase, automated reports, and AI-driven insights.",
+                description:
+                  "Cloud-based, real-time updates with Firebase, automated reports, and AI-driven insights.",
               },
             ].map((feature, index) => (
               <div
@@ -390,7 +433,10 @@ const SaasLanding = () => {
       </div>
 
       {/* Dashboard Preview Section */}
-      <div className="py-20 bg-gradient-to-b from-white/30 to-indigo-50/30">
+      <div
+        className="py-20 bg-gradient-to-b from-white/30 to-indigo-50/30"
+        id="solutions"
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold mb-4">Intuitive Dashboard</h2>
@@ -403,7 +449,7 @@ const SaasLanding = () => {
       </div>
 
       {/* Testimonials Section */}
-      <div className="py-20 bg-white/30">
+      <div className="py-20 bg-white/30" id="users">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold mb-4">What Our Users Say</h2>
@@ -432,10 +478,15 @@ const SaasLanding = () => {
       </div>
 
       {/* Pricing Section */}
-      <div className="py-20 bg-gradient-to-b from-white/30 to-indigo-50/30">
+      <div
+        className="py-20 bg-gradient-to-b from-white/30 to-indigo-50/30"
+        id="pricing"
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold mb-4">Simple, Transparent Pricing</h2>
+            <h2 className="text-4xl font-bold mb-4">
+              Simple, Transparent Pricing
+            </h2>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
               Choose the plan that best fits your team's needs
             </p>
@@ -478,41 +529,13 @@ const SaasLanding = () => {
         </div>
       </div>
 
-      {/* CTA Section */}
-      <div className="py-20 bg-gradient-to-br from-indigo-600 to-purple-600 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0zNiAxOGMzLjMxMyAwIDYtMi42ODcgNi02cy0yLjY4Ny02LTYtNi02IDIuNjg3LTYgNiAyLjY4NyA2IDYgNnptMCAwIiBmaWxsPSIjZmZmIi8+PC9nPjwvc3ZnPg==')] bg-repeat"/>
-        </div>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-          <div className="text-center">
-            <h2 className="text-4xl font-bold text-white mb-4">
-              Ready to Transform Your Project Management?
-            </h2>
-            <p className="text-xl text-white/90 max-w-2xl mx-auto mb-8">
-              Join thousands of teams already using PROJEX to boost their productivity
-            </p>
-            <div className="flex flex-col sm:flex-row justify-center gap-4">
-            <Link to="/signup" className="w-full">
-              <button className="px-8 py-4 bg-white text-indigo-600 rounded-xl font-medium hover:bg-opacity-90 transition-all flex items-center justify-center group">
-                Start Free Trial
-                <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" />
-              </button>
-              </Link>
-              <Link to="/signup" className="w-full">
-              <button className="px-8 py-4 bg-transparent border-2 border-white text-white rounded-xl font-medium hover:bg-white/10 transition-all">
-                Schedule Demo
-              </button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* FAQ Section */}
-      <div className="py-20 bg-white/30">
+      <div className="py-20 bg-white/30" id="faq">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold mb-4">Frequently Asked Questions</h2>
+            <h2 className="text-4xl font-bold mb-4">
+              Frequently Asked Questions
+            </h2>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
               Everything you need to know about PROJEX
             </p>
@@ -521,26 +544,64 @@ const SaasLanding = () => {
             {[
               {
                 q: "How does the free trial work?",
-                a: "Start with a 14-day free trial of our Professional plan. No credit card required. Cancel anytime."
+                a: "Start with a 14-day free trial of our Professional plan. No credit card required. Cancel anytime.",
               },
               {
                 q: "Can I change plans later?",
-                a: "Yes, you can upgrade or downgrade your plan at any time. Changes take effect immediately."
+                a: "Yes, you can upgrade or downgrade your plan at any time. Changes take effect immediately.",
               },
               {
                 q: "What kind of support do you offer?",
-                a: "We provide 24/7 email support for all plans, with priority support and dedicated account managers for Professional and Enterprise plans."
+                a: "We provide 24/7 email support for all plans, with priority support and dedicated account managers for Professional and Enterprise plans.",
               },
               {
                 q: "Is my data secure?",
-                a: "We use bank-grade encryption and follow industry best practices for security. Your data is stored in secure, SOC 2 certified data centers."
-              }
+                a: "We use bank-grade encryption and follow industry best practices for security. Your data is stored in secure, SOC 2 certified data centers.",
+              },
             ].map((faq, index) => (
-              <div key={index} className="bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-lg">
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">{faq.q}</h3>
+              <div
+                key={index}
+                className="bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-lg"
+              >
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                  {faq.q}
+                </h3>
                 <p className="text-gray-600">{faq.a}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </div>
+      {/* CTA Section */}
+      <div
+        className="py-20 bg-gradient-to-br from-indigo-600 to-purple-600 relative overflow-hidden"
+        id="contact"
+      >
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0zNiAxOGMzLjMxMyAwIDYtMi42ODcgNi02cy0yLjY4Ny02LTYtNi02IDIuNjg3LTYgNiAyLjY4NyA2IDYgNnptMCAwIiBmaWxsPSIjZmZmIi8+PC9nPjwvc3ZnPg==')] bg-repeat" />
+        </div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
+          <div className="text-center">
+            <h2 className="text-4xl font-bold text-white mb-4">
+              Ready to Transform Your Project Management?
+            </h2>
+            <p className="text-xl text-white/90 max-w-2xl mx-auto mb-8">
+              Join thousands of teams already using PROJEX to boost their
+              productivity
+            </p>
+            <div className="flex flex-col sm:flex-row justify-center gap-4">
+              <Link to="/signup" className="w-full">
+                <button className="px-8 py-4 bg-white text-indigo-600 rounded-xl font-medium hover:bg-opacity-90 transition-all flex items-center justify-center group">
+                  Start Free Trial
+                  <ArrowRight className="ml-2 group-hover:translate-x-1 transition-transform" />
+                </button>
+              </Link>
+              <Link to="/signup" className="w-full">
+                <button className="px-8 py-4 bg-transparent border-2 border-white text-white rounded-xl font-medium hover:bg-white/10 transition-all">
+                  Schedule Demo
+                </button>
+              </Link>
+            </div>
           </div>
         </div>
       </div>
@@ -548,7 +609,6 @@ const SaasLanding = () => {
       {/* Footer */}
       <footer className="bg-gray-900 text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        
           <div className="mt-12 pt-8 border-t border-gray-800">
             <div className="flex flex-col md:flex-row justify-between items-center">
               <div className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400 mb-4 md:mb-0">

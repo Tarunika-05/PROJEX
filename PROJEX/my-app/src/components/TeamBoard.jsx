@@ -51,7 +51,10 @@ const Modal = ({ isOpen, onClose, title, children }) => {
   );
 };
 
-const TeamBoard = () => {
+const TeamBoard = ({
+  userId = "E08NoFqaVzdKousTl3G8MiioMHg2",
+  projectId = "sikqpiiReM9Bz9yp3XCV",
+}) => {
   const [boardTitle, setBoardTitle] = useState("Team Overview");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(boardTitle);
@@ -80,14 +83,15 @@ const TeamBoard = () => {
 
   const [roles, setRoles] = useState([]);
 
+  // Get Firestore base path
+  const getTeamPath = () => `users/${userId}/projects/${projectId}/team`;
+
   // Load all departments on component mount
   useEffect(() => {
-    // Modify the loadDepartments function inside the useEffect
-
     const loadDepartments = async () => {
       try {
         setIsLoading(true);
-        const teamsCollectionRef = collection(db, "projects/project1/team");
+        const teamsCollectionRef = collection(db, getTeamPath());
         const teamsSnapshot = await getDocs(teamsCollectionRef);
 
         const departmentsData = [];
@@ -122,14 +126,14 @@ const TeamBoard = () => {
     };
 
     loadDepartments();
-  }, []);
+  }, [userId, projectId]);
 
   const handleUpdateMember = async () => {
     if (!editingMember) return;
 
     try {
       const departmentId = editingMember.departmentId;
-      const departmentRef = doc(db, "projects/project1/team", departmentId);
+      const departmentRef = doc(db, `${getTeamPath()}/${departmentId}`);
 
       // Get the current department data
       const departmentSnapshot = await getDoc(departmentRef);
@@ -182,11 +186,7 @@ const TeamBoard = () => {
     if (!editingDepartment) return;
 
     try {
-      const departmentRef = doc(
-        db,
-        "projects/project1/team",
-        editingDepartment.id
-      );
+      const departmentRef = doc(db, `${getTeamPath()}/${editingDepartment.id}`);
 
       // Extract just the color part without the prefixes
       let colorValue = editingDepartment.color;
@@ -236,7 +236,7 @@ const TeamBoard = () => {
         return;
       }
 
-      const departmentRef = doc(db, "projects/project1/team", department.id);
+      const departmentRef = doc(db, `${getTeamPath()}/${department.id}`);
 
       // Get member to remove
       const memberToRemove = department.members.find((m) => m.id === memberId);
@@ -267,7 +267,7 @@ const TeamBoard = () => {
   const handleDeleteDepartment = async (departmentId) => {
     try {
       // Delete from Firestore
-      const departmentRef = doc(db, "projects/project1/team", departmentId);
+      const departmentRef = doc(db, `${getTeamPath()}/${departmentId}`);
       await deleteDoc(departmentRef);
 
       // Update local state
@@ -284,7 +284,7 @@ const TeamBoard = () => {
 
     try {
       const newId = newDepartment.title.toLowerCase().replace(/\s+/g, "-");
-      const newDeptRef = doc(db, "projects/project1/team", newId);
+      const newDeptRef = doc(db, `${getTeamPath()}/${newId}`);
 
       // Use consistent color format
       const colorValue = newDepartment.color;
@@ -332,8 +332,7 @@ const TeamBoard = () => {
 
       const departmentRef = doc(
         db,
-        "projects/project1/team",
-        newMember.departmentId
+        `${getTeamPath()}/${newMember.departmentId}`
       );
 
       // Update Firestore
@@ -386,8 +385,8 @@ const TeamBoard = () => {
 
     try {
       // Source and target department references
-      const sourceDeptRef = doc(db, "projects/project1/team", sourceRoleId);
-      const targetDeptRef = doc(db, "projects/project1/team", targetRoleId);
+      const sourceDeptRef = doc(db, `${getTeamPath()}/${sourceRoleId}`);
+      const targetDeptRef = doc(db, `${getTeamPath()}/${targetRoleId}`);
 
       // 1. Remove member from source department
       await updateDoc(sourceDeptRef, {
@@ -454,7 +453,7 @@ const TeamBoard = () => {
   return (
     <div
       className={`
-    h-full w-full 
+     w-full h-[560px] overflow-auto 
     ${"bg-white/60 border-white/50"} 
     backdrop-blur-lg rounded-2xl p-8 shadow-lg border
   `}
@@ -554,7 +553,7 @@ const TeamBoard = () => {
             onClose={() => setShowAddModal(false)}
             title="Add New Member"
           >
-            <div className="space-y-4">
+            <div className="space-y-2">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Name
@@ -565,7 +564,7 @@ const TeamBoard = () => {
                   onChange={(e) =>
                     setNewMember({ ...newMember, name: e.target.value })
                   }
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-2 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   placeholder="Enter member name"
                 />
               </div>
@@ -867,12 +866,19 @@ const TeamBoard = () => {
                           draggable
                           onDragStart={() => handleDragStart(member, role.id)}
                         >
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center shadow-sm">
-                              {member.name.charAt(0)}
+                          <div className="flex items-center gap-3">
+                            <div className="relative">
+                              <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-700 font-semibold">
+                                {member.name.charAt(0).toUpperCase()}
+                              </div>
+                              <div
+                                className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${getStatusColor(
+                                  member.status
+                                )}`}
+                              ></div>
                             </div>
                             <div>
-                              <h4 className="font-medium text-gray-900">
+                              <h4 className="font-medium text-gray-800">
                                 {member.name}
                               </h4>
                               <p className="text-sm text-gray-500">
@@ -880,42 +886,37 @@ const TeamBoard = () => {
                               </p>
                             </div>
                           </div>
-                          <div className="flex items-center space-x-2">
-                            <div
-                              className={`w-2 h-2 rounded-full ${getStatusColor(
-                                member.status
-                              )}`}
-                            ></div>
-                            <div className="flex items-center space-x-1">
-                              <button
-                                onClick={() =>
-                                  setEditingMember({
-                                    ...member,
-                                    departmentId: role.id,
-                                  })
-                                }
-                                className="p-1 text-gray-600 hover:text-indigo-600"
-                              >
-                                <Edit2 size={14} />
-                              </button>
-                              <button
-                                onClick={() =>
-                                  setDeleteConfirmation({
-                                    type: "member",
-                                    id: member.id,
-                                  })
-                                }
-                                className="p-1 text-gray-600 hover:text-red-600"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
+                          <div className="flex items-center space-x-1">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingMember({
+                                  ...member,
+                                  departmentId: role.id,
+                                });
+                              }}
+                              className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteConfirmation({
+                                  type: "member",
+                                  id: member.id,
+                                });
+                              }}
+                              className="p-1.5 text-gray-500 hover:text-red-500 hover:bg-gray-100 rounded-lg"
+                            >
+                              <Trash2 size={14} />
+                            </button>
                           </div>
                         </div>
                       ))}
-                    {(!role.members || role.members.length === 0) && (
-                      <div className="text-center py-6 text-gray-500">
-                        No team members yet
+                    {role.members.length === 0 && (
+                      <div className="text-center py-4 text-gray-500">
+                        No members in this department
                       </div>
                     )}
                   </div>

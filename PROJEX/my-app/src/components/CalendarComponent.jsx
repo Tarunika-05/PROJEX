@@ -10,7 +10,10 @@ import {
   onSnapshot,
 } from "firebase/firestore";
 
-const CalendarComponent = () => {
+const CalendarComponent = ({
+  userId = "E08NoFqaVzdKousTl3G8MiioMHg2",
+  projectId = "sikqpiiReM9Bz9yp3XCV",
+}) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showEventModal, setShowEventModal] = useState(false);
   const [showEventDetailsModal, setShowEventDetailsModal] = useState(false);
@@ -25,7 +28,12 @@ const CalendarComponent = () => {
   }, [isDarkMode]);
 
   useEffect(() => {
-    const calendarDocRef = doc(db, "projects/project1/calendar", "eventsDoc");
+    // Updated Firestore path with dynamic user ID and project ID
+    const calendarDocRef = doc(
+      db,
+      `users/${userId}/projects/${projectId}/calendar`,
+      "config"
+    );
 
     // 🔹 Listen for real-time updates from Firestore
     const unsubscribe = onSnapshot(calendarDocRef, (docSnap) => {
@@ -39,7 +47,7 @@ const CalendarComponent = () => {
     });
 
     return () => unsubscribe(); // Cleanup listener when component unmounts
-  }, []);
+  }, [userId, projectId]);
 
   const [events, setEvents] = useState([
     {
@@ -158,7 +166,12 @@ const CalendarComponent = () => {
   const handleEventSave = async () => {
     if (!currentEvent.title.trim()) return;
 
-    const calendarDocRef = doc(db, "projects/project1/calendar", "eventsDoc");
+    // Updated Firestore path with dynamic user ID and project ID
+    const calendarDocRef = doc(
+      db,
+      `users/${userId}/projects/${projectId}/calendar`,
+      "config"
+    );
     const docSnap = await getDoc(calendarDocRef);
 
     let updatedEvents = [];
@@ -199,7 +212,12 @@ const CalendarComponent = () => {
   };
 
   const handleEventDelete = async (eventId) => {
-    const calendarDocRef = doc(db, "projects/project1/calendar", "eventsDoc");
+    // Updated Firestore path with dynamic user ID and project ID
+    const calendarDocRef = doc(
+      db,
+      `users/${userId}/projects/${projectId}/calendar`,
+      "config"
+    );
     const docSnap = await getDoc(calendarDocRef);
 
     if (docSnap.exists()) {
