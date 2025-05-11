@@ -1,4 +1,4 @@
-![image](https://github.com/user-attachments/assets/2e4f8ee0-d602-461d-b722-c6fcecce6a88)# 📁 Projex – Smart Project Management Redefined
+📁 Projex – Smart Project Management Redefined
 
 **Projex** is a modern web-based project management tool designed for students, developers, and small teams. Built with React, Tailwind CSS, and Firebase, Projex offers a user-friendly experience to manage projects, tasks, timelines, and team collaboration efficiently.
 
@@ -27,12 +27,19 @@ Hosted on **Firebase Hosting** for seamless CI/CD and global accessibility.
 ## 📸 Screenshots
 
 ![image](https://github.com/user-attachments/assets/48317282-0d45-4266-8811-f17c123a325d)
+
 ![image](https://github.com/user-attachments/assets/3bcecb37-27e1-40df-8ac3-35d2f0309d58)
+
 ![image](https://github.com/user-attachments/assets/181e70ab-eb4a-47f0-90f2-fc0ddf57815c)
+
 ![image](https://github.com/user-attachments/assets/2f9838c2-f197-418a-8d8b-3d84f8ac8093)
+
 ![image](https://github.com/user-attachments/assets/6f5d36f8-ebfe-4852-b84d-3b8a0f2e6227)
+
 ![image](https://github.com/user-attachments/assets/695e294c-5d02-4e37-afdd-a5021db8d3be)
+
 ![image](https://github.com/user-attachments/assets/4fb93e1c-916f-4344-bf41-212bf12292a2)
+
 ![image](https://github.com/user-attachments/assets/370c4bcd-5a07-4fc3-a0e5-6cbb43767a07)
 
 
